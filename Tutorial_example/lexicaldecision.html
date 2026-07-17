@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html>
+  <head>
+
+<!--TITLE-->
+    <title>Language Experiment</title>
+
+
+    <script src="jspsych/jspsych.js"></script>
+    <link href="jspsych/jspsych.css" rel="stylesheet" type="text/css" />
+    <script src="jspsych/saveData.js"></script>
+
+<!--*****APPEARANCE SECTION BEGINS HERE***** (gray background, white text)-->
+    <style>
+      html, body { background-color: rgb(127, 127, 127); }
+      .jspsych-display-element, .jspsych-content { color: #ffffff; }
+    </style>
+<!--*****APPEARANCE SECTION ENDS HERE*****-->
+
+<!--*****MODULES SECTION BEGINS HERE*****-->
+    <script src="jspsych/plugin-html-keyboard-response.js"></script>
+<!--*****MODULES SECTION ENDS HERE*****-->
+
+  </head>
+  <body></body>
+  <script>
+    var jsPsych = initJsPsych({
+      show_progress_bar: true,        // progress bar across the top
+    });
+    var timeline = [];
+
+// *****PRELOAD AREA SECTION BEGINS HERE*****
+// (No images/audio/video in this experiment, so nothing to preload.)
+// *****PRELOAD AREA SECTION ENDS HERE*****
+
+// *****BLOCK SECTION BEGINS HERE*****
+
+    //*****BLOCK1 (INSTRUCTIONS) BEGINS HERE*****
+
+        //*****BLOCK1 STIMULI BEGINS HERE*****
+        var stimuli1 = [
+            {message: `<p>Welcome!</p>
+                       <p>In this task you will see a letter string in the middle of the screen.</p>
+                       <p>Press <strong>j</strong> (with your <strong>right hand</strong>) if it is a <strong>real Brazilian Portuguese word</strong>.</p>
+                       <p>Press <strong>f</strong> (with your <strong>left hand</strong>) if it is <strong>not a word</strong>.</p>
+                       <p>Try to respond as quickly and accurately as you can.</p>
+                       <p>Press any key to begin.</p>`},
+            ];
+        //*****BLOCK1 STIMULI ENDS HERE*****
+
+        //*****BLOCK1 TEST BEGINS HERE*****
+            var test1 = {
+            type: jsPsychHtmlKeyboardResponse,
+            stimulus: function() {
+                var stim = jsPsych.evaluateTimelineVariable('message');
+                return stim;
+            },
+            };
+        //*****BLOCK1 TEST ENDS HERE*****
+
+        //*****BLOCK1 PROCEDURE BEGINS HERE*****
+            var procedure1 = {
+                timeline: [test1],
+            timeline_variables: stimuli1,
+            };
+            timeline.push(procedure1);
+        //*****BLOCK1 PROCEDURE ENDS HERE*****
+
+    //*****BLOCK1 ENDS HERE*****
+
+    //*****BLOCK2 (LEXICAL DECISION) BEGINS HERE*****
+
+        //*****BLOCK2 STIMULI BEGINS HERE*****
+        // Each item has: the letter string, whether it is a word, and the correct key.
+        // Mapping: real word = J (right hand), non-word = F (left hand).
+        var stimuli2 = [
+            {stimulus: 'HOUSE', lexicality: 'word',    correct_response: 'j'},
+            {stimulus: 'BREAD', lexicality: 'word',    correct_response: 'j'},
+            {stimulus: 'TABLE', lexicality: 'word',    correct_response: 'j'},
+            {stimulus: 'GREEN', lexicality: 'word',    correct_response: 'j'},
+            {stimulus: 'MUSIC', lexicality: 'word',    correct_response: 'j'},
+            {stimulus: 'FLORP', lexicality: 'nonword', correct_response: 'f'},
+            {stimulus: 'BLINT', lexicality: 'nonword', correct_response: 'f'},
+            {stimulus: 'DREMP', lexicality: 'nonword', correct_response: 'f'},
+            {stimulus: 'GLUSK', lexicality: 'nonword', correct_response: 'f'},
+            {stimulus: 'PROST', lexicality: 'nonword', correct_response: 'f'},
+            ];
+        //*****BLOCK2 STIMULI ENDS HERE*****
+
+        //*****BLOCK2 TEST BEGINS HERE*****
+            // A fixation cross shown before each word (no response, 500 ms).
+            var fixation = {
+                type: jsPsychHtmlKeyboardResponse,
+                stimulus: '<div style="font-size: 60px;">+</div>',
+                choices: "NO_KEYS",
+                trial_duration: 500,
+                data: {task: 'fixation'},
+            };
+
+            // The word/non-word itself. Only the stimulus is shown (no key reminder).
+            var test2 = {
+            type: jsPsychHtmlKeyboardResponse,
+            stimulus: function() {
+                var stim = jsPsych.evaluateTimelineVariable('stimulus');
+                return '<div style="font-size: 48px; font-weight: bold;">' + stim + '</div>';
+            },
+            choices: ['f', 'j'],
+            data: {
+                task: 'ldt',
+                word: jsPsych.timelineVariable('stimulus'),
+                lexicality: jsPsych.timelineVariable('lexicality'),
+                correct_response: jsPsych.timelineVariable('correct_response'),
+            },
+            on_finish: function(data) {
+                // Mark whether the participant pressed the correct key.
+                data.correct = jsPsych.pluginAPI.compareKeys(data.response, data.correct_response);
+            },
+            };
+        //*****BLOCK2 TEST ENDS HERE*****
+
+        //*****BLOCK2 PROCEDURE BEGINS HERE*****
+            var procedure2 = {
+                timeline: [fixation, test2],
+            timeline_variables: stimuli2,
+            randomize_order: true,
+            };
+            timeline.push(procedure2);
+        //*****BLOCK2 PROCEDURE ENDS HERE*****
+
+    //*****BLOCK2 ENDS HERE*****
+
+// *****BLOCK SECTION ENDS HERE*****
+
+    // Summary / thank-you screen.
+    var debrief_block = {
+          type: jsPsychHtmlKeyboardResponse,
+          stimulus: function() {
+            var trials = jsPsych.data.get().filter({task: 'ldt'});
+            var correct = trials.filter({correct: true});
+            var accuracy = trials.count() > 0 ? Math.round(correct.count() / trials.count() * 100) : 0;
+            var rt = Math.round(correct.select('rt').mean());
+            return `<p>All done. thank you!</p>
+                    <p>You responded correctly on ${accuracy}% of trials.</p>
+                    <p>Your average response time on correct trials was ${rt} ms.</p>
+                    <p>Press any key to save your data and finish.</p>`;
+      },
+    };
+    timeline.push(debrief_block);
+
+    // Final screen: save the data, then confirm it was saved.
+    var save_block = {
+          type: jsPsychHtmlKeyboardResponse,
+
+          // 1. Display this while saving is attempted
+          stimulus: '<p style="font-size: 24px;">Saving your data...</p>',
+
+          // 2. Do not accept any keyboard response
+          choices: "NO_KEYS",       // this is the last screen, it says put  
+
+          // 3. Run this function when the saving screen appears
+          on_load: function() {
+
+            // 4. Fill the progress bar
+            jsPsych.progressBar.progress = 1;
+
+            // 5. Convert all jsPsych data into CSV and send it to saveData(). We drop the bulky "stimulus" column so the CSV stays clean and tabular
+            saveData('ldt', 
+                jsPsych.data.get().ignore('stimulus').csv()
+            ).then(function() {
+            
+            // 6. Run this only after saveData() finishes
+                var el = document.querySelector('#jspsych-content') || 
+                jsPsych.getDisplayElement();
+
+            // 7. Replace "Saving your data..." with the confirmation
+            el.innerHTML =
+              '<p style="font-size: 24px;">Data saved successfully. You can close the window.</p>';
+            });
+      },
+    };
+    timeline.push(save_block);
+
+    jsPsych.run(timeline);
+  </script>
+</html>

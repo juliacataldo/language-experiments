@@ -1,0 +1,2353 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>Semantic Norming Experiment</title>
+
+    <!-- jsPsych core files from your existing local jspsych folder -->
+    <script src="jspsych/jspsych.js"></script>
+    <link href="jspsych/jspsych.css" rel="stylesheet" type="text/css">
+
+    <!-- Local saving helper used with serve.py -->
+    <script src="jspsych/saveData.js"></script>
+
+    <!-- Plugin used for instructions, ratings, feedback, and pauses -->
+    <script src="jspsych/plugin-html-keyboard-response.js"></script>
+
+    <!-- DataPipe is used only when the experiment runs online -->
+    <script src="https://unpkg.com/@jspsych-contrib/plugin-pipe@0.6.0"></script>
+
+    <style>
+      html,
+      body {
+        background-color: rgb(127, 127, 127);
+      }
+
+      .jspsych-display-element,
+      .jspsych-content {
+        color: #ffffff;
+      }
+
+      .text-screen {
+        max-width: 900px;
+        margin: 0 auto;
+        text-align: center;
+        font-size: 20px;
+        line-height: 1.5;
+      }
+
+      .text-screen h1,
+      .text-screen h2 {
+        text-align: center;
+      }
+
+      .continue-prompt {
+        margin-top: 35px;
+        text-align: center;
+        font-weight: bold;
+      }
+
+      .rating-trial {
+        width: min(950px, 92vw);
+        margin: 0 auto;
+        text-align: center;
+      }
+
+      .rating-word-label,
+      .rating-sentence-label {
+        margin-bottom: 8px;
+        font-size: 17px;
+        opacity: 0.9;
+      }
+
+      .rating-word {
+        margin: 0 0 38px;
+        font-size: 44px;
+        font-weight: bold;
+      }
+
+      .rating-sentence {
+        max-width: 850px;
+        margin: 0 auto 45px;
+        font-size: 28px;
+        line-height: 1.45;
+      }
+
+      .rating-question {
+        margin: 0 auto 24px;
+        font-size: 22px;
+        font-weight: bold;
+      }
+
+      .rating-scale {
+        display: grid;
+        grid-template-columns: repeat(7, minmax(55px, 85px));
+        justify-content: center;
+        gap: 14px;
+        margin: 0 auto;
+      }
+
+      .rating-button {
+        min-height: 64px;
+        border: 2px solid #ffffff;
+        border-radius: 8px;
+        background: rgba(255, 255, 255, 0.12);
+        color: #ffffff;
+        font: inherit;
+        font-size: 28px;
+        font-weight: bold;
+        cursor: pointer;
+      }
+
+      .rating-button:hover,
+      .rating-button:focus {
+        background: rgba(255, 255, 255, 0.28);
+        outline: 3px solid rgba(255, 255, 255, 0.45);
+        outline-offset: 2px;
+      }
+
+      .rating-endpoints {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        max-width: 680px;
+        margin: 12px auto 0;
+        font-size: 17px;
+      }
+
+      .rating-endpoints span:first-child {
+        text-align: left;
+      }
+
+      .rating-endpoints span:last-child {
+        text-align: right;
+      }
+
+      .rating-key-instruction {
+        margin-top: 28px;
+        font-size: 18px;
+      }
+
+      .practice-feedback {
+        font-size: 32px;
+        font-weight: bold;
+        text-align: center;
+      }
+
+      @media (max-width: 650px) {
+        .rating-scale {
+          grid-template-columns: repeat(7, minmax(38px, 1fr));
+          gap: 7px;
+        }
+
+        .rating-button {
+          min-height: 58px;
+          font-size: 24px;
+        }
+
+        .rating-word {
+          font-size: 36px;
+        }
+
+        .rating-sentence {
+          font-size: 23px;
+        }
+      }
+    
+      /* Language-background questionnaire */
+      .language-survey {
+        max-width: 900px;
+        margin: 30px auto 60px;
+        padding: 0 18px;
+        text-align: left;
+        font-size: 18px;
+        line-height: 1.45;
+      }
+
+      .language-survey h1 {
+        text-align: center;
+        margin-bottom: 16px;
+      }
+
+      .language-survey-intro {
+        margin-bottom: 28px;
+      }
+
+      .survey-question {
+        margin: 0 0 24px;
+        padding: 18px;
+        border: 1px solid rgba(255, 255, 255, 0.45);
+        border-radius: 8px;
+        background: rgba(255, 255, 255, 0.07);
+      }
+
+      .survey-question > label,
+      .survey-question > legend,
+      .survey-question-title {
+        display: block;
+        margin-bottom: 10px;
+        font-weight: bold;
+      }
+
+      .survey-question fieldset {
+        margin: 0;
+        padding: 0;
+        border: 0;
+      }
+
+      .survey-options {
+        display: grid;
+        gap: 8px;
+      }
+
+      .survey-option {
+        display: flex;
+        align-items: flex-start;
+        gap: 8px;
+      }
+
+      .survey-option input {
+        margin-top: 5px;
+      }
+
+      .language-survey input[type="text"],
+      .language-survey input[type="number"],
+      .language-survey select,
+      .language-survey textarea {
+        box-sizing: border-box;
+        width: 100%;
+        max-width: 100%;
+        padding: 10px 12px;
+        border: 1px solid #ffffff;
+        border-radius: 5px;
+        background: #ffffff;
+        color: #000000;
+        font: inherit;
+      }
+
+      .language-survey textarea {
+        min-height: 110px;
+        resize: vertical;
+      }
+
+      .survey-inline-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 16px;
+      }
+
+      .conditional-survey {
+        display: none;
+        margin-top: 16px;
+        padding-top: 16px;
+        border-top: 1px dashed rgba(255, 255, 255, 0.55);
+      }
+
+      .conditional-survey.visible {
+        display: block;
+      }
+
+      .survey-submit-row {
+        text-align: center;
+        margin-top: 30px;
+      }
+
+      .survey-submit-button {
+        padding: 12px 24px;
+        border: 2px solid #ffffff;
+        border-radius: 7px;
+        background: rgba(255, 255, 255, 0.14);
+        color: #ffffff;
+        font: inherit;
+        font-size: 20px;
+        font-weight: bold;
+        cursor: pointer;
+      }
+
+      .survey-submit-button:hover,
+      .survey-submit-button:focus {
+        background: rgba(255, 255, 255, 0.28);
+        outline: 3px solid rgba(255, 255, 255, 0.35);
+        outline-offset: 2px;
+      }
+
+      .survey-required-note {
+        margin-bottom: 20px;
+        font-size: 16px;
+        font-style: italic;
+      }
+
+      @media (max-width: 650px) {
+        .survey-inline-grid {
+          grid-template-columns: 1fr;
+        }
+      }
+
+    </style>
+  </head>
+
+  <body></body>
+
+  <script>
+    async function startExperiment() {
+      // ==============================================================
+      // 1. GENERAL SETTINGS
+      // ==============================================================
+
+      /*
+       * Change these labels if your task asks a different rating question.
+       *
+       * The current wording is appropriate for semantic norming:
+       * participants judge how well the sentence describes the word's
+       * meaning.
+       */
+      var RATING_QUESTION =
+        "How well does the paraphrase describe the meaning of the word?";
+
+      var LOW_ENDPOINT_LABEL = "1 — Very poor fit";
+      var HIGH_ENDPOINT_LABEL = "7 — Perfect fit";
+
+      var PRACTICE_FEEDBACK_DURATION_MS = 900;
+
+      /*
+       * Upload the approved consent PDF to the same folder as this file
+       * and name it consent.pdf. Change this value only if you use a
+       * different filename.
+       */
+      var CONSENT_PDF_FILE = "consent.pdf";
+
+      /*
+       * Keep main_stimuli.csv in the same folder as this HTML file.
+       *
+       * Replace the DataPipe placeholder before putting the experiment
+       * online. Do not put your private OSF token in this file.
+       */
+      var MAIN_STIMULI_FILE = "main_stimuli.csv";
+      var DATAPIPE_EXPERIMENT_ID =
+        "O7bfIHuan3Jc";
+
+      /*
+       * Automatic saving mode:
+       * - localhost / 127.0.0.1 / 0.0.0.0: serve.py saves locally
+       * - GitHub Pages or another online host: DataPipe saves to OSF
+       */
+      var LOCAL_HOSTNAMES = [
+        "localhost",
+        "127.0.0.1",
+        "0.0.0.0"
+      ];
+
+      var IS_LOCAL_RUN =
+        LOCAL_HOSTNAMES.includes(window.location.hostname);
+
+      var RUN_MODE =
+        IS_LOCAL_RUN
+          ? "local"
+          : "online_datapipe";
+
+      if (window.location.protocol === "file:") {
+        throw new Error(
+          "This experiment loads main_stimuli.csv. Run it through " +
+          "http://localhost:8000/ instead of double-clicking exp1.html."
+        );
+      }
+
+      if (
+        !IS_LOCAL_RUN &&
+        DATAPIPE_EXPERIMENT_ID ===
+          "O7bfIHuan3Jc"
+      ) {
+        throw new Error(
+          "Online saving is not configured. Replace the DataPipe " +
+          "Experiment ID placeholder in exp1.html."
+        );
+      }
+
+      var jsPsych = initJsPsych({
+        show_progress_bar: true,
+        auto_update_progress_bar: false,
+        message_progress_bar: "Experiment progress"
+      });
+
+      var timeline = [];
+
+      /*
+       * Generate a new random eight-digit participant number for every run.
+       * URL parameters, including Prolific IDs, are deliberately ignored.
+       */
+      function generateRandomEightDigitId() {
+        if (
+          window.crypto &&
+          window.crypto.getRandomValues
+        ) {
+          var randomValues =
+            new Uint32Array(1);
+
+          window.crypto.getRandomValues(
+            randomValues
+          );
+
+          return String(
+            10000000 +
+            (
+              randomValues[0] %
+              90000000
+            )
+          );
+        }
+
+        return String(
+          Math.floor(
+            10000000 +
+            Math.random() * 90000000
+          )
+        );
+      }
+
+      var participantId =
+        generateRandomEightDigitId();
+
+      var sessionTimestamp =
+        new Date()
+          .toISOString()
+          .replace(/[^0-9]/g, "")
+          .slice(0, 14);
+
+      var dataFileStem =
+        "semantic_norming_" +
+        participantId +
+        "_" +
+        sessionTimestamp;
+
+      jsPsych.data.addProperties({
+        participant_id: participantId,
+        run_mode: RUN_MODE,
+        session_timestamp_utc: sessionTimestamp
+      });
+
+
+      // ==============================================================
+      // 2. CSV FUNCTIONS
+      // ==============================================================
+
+      /*
+       * Parse comma-delimited CSV, including:
+       * - quoted fields
+       * - commas inside quoted sentences
+       * - doubled quotation marks
+       *
+       * In Excel, save the spreadsheet as:
+       * CSV UTF-8 (Comma delimited) (.csv)
+       */
+      function parseCSV(csvText) {
+        var rows = [];
+        var row = [];
+        var field = "";
+        var insideQuotes = false;
+
+        for (
+          var index = 0;
+          index < csvText.length;
+          index++
+        ) {
+          var character = csvText[index];
+          var nextCharacter = csvText[index + 1];
+
+          if (character === '"') {
+            if (
+              insideQuotes &&
+              nextCharacter === '"'
+            ) {
+              field += '"';
+              index++;
+            } else {
+              insideQuotes = !insideQuotes;
+            }
+          } else if (
+            character === "," &&
+            !insideQuotes
+          ) {
+            row.push(field);
+            field = "";
+          } else if (
+            (
+              character === "\n" ||
+              character === "\r"
+            ) &&
+            !insideQuotes
+          ) {
+            if (
+              character === "\r" &&
+              nextCharacter === "\n"
+            ) {
+              index++;
+            }
+
+            row.push(field);
+            field = "";
+
+            if (
+              row.some(function(value) {
+                return value.trim() !== "";
+              })
+            ) {
+              rows.push(row);
+            }
+
+            row = [];
+          } else {
+            field += character;
+          }
+        }
+
+        row.push(field);
+
+        if (
+          row.some(function(value) {
+            return value.trim() !== "";
+          })
+        ) {
+          rows.push(row);
+        }
+
+        return rows;
+      }
+
+
+      async function loadMainStimuli(filename) {
+        var response =
+          await fetch(
+            filename,
+            { cache: "no-store" }
+          );
+
+        if (!response.ok) {
+          throw new Error(
+            "Could not load " +
+            filename +
+            ". The server returned HTTP " +
+            response.status +
+            "."
+          );
+        }
+
+        var csvText = await response.text();
+        var parsedRows = parseCSV(csvText);
+
+        if (parsedRows.length < 2) {
+          throw new Error(
+            filename +
+            " must contain a header row and at least one stimulus row."
+          );
+        }
+
+        var headers =
+          parsedRows[0].map(function(header) {
+            return header
+              .replace(/^\uFEFF/, "")
+              .trim();
+          });
+
+        if (
+          headers.some(function(header) {
+            return header === "";
+          })
+        ) {
+          throw new Error(
+            filename +
+            " contains a blank column name."
+          );
+        }
+
+        if (
+          new Set(headers).size !==
+          headers.length
+        ) {
+          throw new Error(
+            filename +
+            " contains duplicate column names."
+          );
+        }
+
+        var requiredColumns = [
+          "item_id",
+          "condition",
+          "word",
+          "sentence"
+        ];
+
+        requiredColumns.forEach(
+          function(columnName) {
+            if (!headers.includes(columnName)) {
+              throw new Error(
+                filename +
+                ' is missing the required column "' +
+                columnName +
+                '".'
+              );
+            }
+          }
+        );
+
+        var stimuli =
+          parsedRows
+            .slice(1)
+            .map(function(values, rowIndex) {
+              var item = {};
+
+              headers.forEach(
+                function(header, columnIndex) {
+                  item[header] =
+                    String(
+                      values[columnIndex] || ""
+                    ).trim();
+                }
+              );
+
+              if (
+                !item.item_id ||
+                !item.word ||
+                !item.sentence
+              ) {
+                throw new Error(
+                  "CSV row " +
+                  (rowIndex + 2) +
+                  " has a blank item_id, word, or sentence."
+                );
+              }
+
+              return item;
+            });
+
+        var itemIds =
+          stimuli.map(function(item) {
+            return item.item_id;
+          });
+
+        if (
+          new Set(itemIds).size !==
+          itemIds.length
+        ) {
+          throw new Error(
+            filename +
+            " contains duplicate item_id values."
+          );
+        }
+
+        return {
+          headers: headers,
+          stimuli: stimuli
+        };
+      }
+
+
+      /*
+       * Shuffle the complete stimulus list and divide it into four blocks
+       * that differ in size by at most one trial. No block column is needed
+       * in the spreadsheet.
+       */
+      function divideIntoFourBlocks(stimuli) {
+        if (stimuli.length < 4) {
+          throw new Error(
+            "The main stimulus spreadsheet must contain at least four trials."
+          );
+        }
+
+        var shuffledStimuli =
+          jsPsych.randomization.shuffle(
+            stimuli.slice()
+          );
+
+        var blocks = [[], [], [], []];
+        var baseBlockSize =
+          Math.floor(
+            shuffledStimuli.length / 4
+          );
+        var remainder =
+          shuffledStimuli.length % 4;
+        var stimulusIndex = 0;
+        var overallOrder = 1;
+
+        for (
+          var blockIndex = 0;
+          blockIndex < 4;
+          blockIndex++
+        ) {
+          var thisBlockSize =
+            baseBlockSize +
+            (
+              blockIndex < remainder
+                ? 1
+                : 0
+            );
+
+          for (
+            var position = 1;
+            position <= thisBlockSize;
+            position++
+          ) {
+            blocks[blockIndex].push(
+              Object.assign(
+                {},
+                shuffledStimuli[
+                  stimulusIndex
+                ],
+                {
+                  experimental_block:
+                    blockIndex + 1,
+                  block_trial:
+                    position,
+                  randomized_trial_order:
+                    overallOrder
+                }
+              )
+            );
+
+            stimulusIndex++;
+            overallOrder++;
+          }
+        }
+
+        return blocks;
+      }
+
+
+      // ==============================================================
+      // 3. RATING-TRIAL FUNCTIONS
+      // ==============================================================
+
+      function escapeHtml(value) {
+        return String(value)
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/"/g, "&quot;")
+          .replace(/'/g, "&#039;");
+      }
+
+
+      function makeRatingHtml(word, sentence) {
+        var buttons = "";
+
+        for (
+          var rating = 1;
+          rating <= 7;
+          rating++
+        ) {
+          buttons +=
+            '<button ' +
+              'type="button" ' +
+              'class="rating-button" ' +
+              'data-rating="' +
+              rating +
+              '" ' +
+              'aria-label="Rating ' +
+              rating +
+              '">' +
+              rating +
+            "</button>";
+        }
+
+        return `
+          <div class="rating-trial">
+            <div class="rating-word-label">Word</div>
+
+            <div class="rating-word">
+              ${escapeHtml(word)}
+            </div>
+
+            <div class="rating-sentence-label">
+              Sentence
+            </div>
+
+            <div class="rating-sentence">
+              ${escapeHtml(sentence)}
+            </div>
+
+            <div class="rating-question">
+              ${escapeHtml(RATING_QUESTION)}
+            </div>
+
+            <div
+              class="rating-scale"
+              role="group"
+              aria-label="Seven-point rating scale"
+            >
+              ${buttons}
+            </div>
+
+            <div class="rating-endpoints">
+              <span>
+                ${escapeHtml(LOW_ENDPOINT_LABEL)}
+              </span>
+
+              <span>
+                ${escapeHtml(HIGH_ENDPOINT_LABEL)}
+              </span>
+            </div>
+
+            <p class="rating-key-instruction">
+              Click a button or press the corresponding
+              number key from <strong>1</strong> to
+              <strong>7</strong>.
+            </p>
+          </div>
+        `;
+      }
+
+
+      /*
+       * The html-keyboard-response plugin handles number-key responses.
+       *
+       * This function adds mouse/touch support to the visible buttons.
+       * Button RT is measured from the on_load callback, immediately after
+       * the trial display has been inserted into the page.
+       */
+      function activateRatingButtons() {
+        var buttonStartTime = performance.now();
+        var buttons =
+          document.querySelectorAll(
+            ".rating-button"
+          );
+
+        buttons.forEach(function(button) {
+          button.addEventListener(
+            "click",
+            function() {
+              var rating =
+                Number(
+                  button.dataset.rating
+                );
+
+              buttons.forEach(
+                function(currentButton) {
+                  currentButton.disabled = true;
+                }
+              );
+
+              jsPsych.finishTrial({
+                response: String(rating),
+                rating: rating,
+                response_method: "button",
+                rt:
+                  performance.now() -
+                  buttonStartTime
+              });
+            },
+            { once: true }
+          );
+        });
+      }
+
+
+      function completeRatingData(data) {
+        if (
+          data.rating === undefined ||
+          data.rating === null
+        ) {
+          data.rating =
+            Number(data.response);
+        }
+
+        if (!data.response_method) {
+          data.response_method =
+            "keyboard";
+        }
+      }
+
+
+      // ==============================================================
+      // 4. CONSENT
+      // ==============================================================
+
+      /*
+       * The consent form is displayed from consent.pdf. Upload that PDF to
+       * the same folder as exp1.html.
+       */
+      var consentScreen = {
+        type: jsPsychHtmlKeyboardResponse,
+
+        stimulus: `
+          <div class="text-screen">
+            <h1>Welcome to this experiment!</h1>
+
+            <p>
+              Please read the consent form below before deciding whether
+              you would like to participate.
+            </p>
+
+            <iframe
+              src="${CONSENT_PDF_FILE}"
+              title="Research consent form"
+              style="
+                width:100%;
+                height:65vh;
+                border:1px solid rgba(255,255,255,0.65);
+                background:white;
+              "
+            ></iframe>
+
+            <p style="text-align:center;">
+              <a
+                href="${CONSENT_PDF_FILE}"
+                target="_blank"
+                rel="noopener"
+                style="color:white;text-decoration:underline;"
+              >
+                Open the consent form in a new tab
+              </a>
+            </p>
+
+            <p class="continue-prompt">
+              If you have read the consent form and agree to participate,
+              select <strong>I agree and wish to continue</strong>.
+            </p>
+
+            <p class="continue-prompt">
+              If you do not agree to participate, select
+              <strong>I do not agree</strong>.
+            </p>
+
+            <div style="
+              display:flex;
+              flex-wrap:wrap;
+              justify-content:center;
+              gap:16px;
+              margin-top:24px;
+            ">
+              <button
+                id="consent-accept"
+                type="button"
+                style="font-size:18px;padding:12px 18px;cursor:pointer;"
+              >
+                I agree and wish to continue
+              </button>
+
+              <button
+                id="consent-decline"
+                type="button"
+                style="font-size:18px;padding:12px 18px;cursor:pointer;"
+              >
+                I do not agree
+              </button>
+            </div>
+          </div>
+        `,
+
+        choices: ["c", "x"],
+
+        data: {
+          task: "consent"
+        },
+
+        on_load: function() {
+          document
+            .getElementById("consent-accept")
+            .addEventListener(
+              "click",
+              function() {
+                jsPsych.finishTrial({
+                  response: "c",
+                  response_method: "button"
+                });
+              },
+              { once: true }
+            );
+
+          document
+            .getElementById("consent-decline")
+            .addEventListener(
+              "click",
+              function() {
+                jsPsych.finishTrial({
+                  response: "x",
+                  response_method: "button"
+                });
+              },
+              { once: true }
+            );
+        },
+
+        on_finish: function(data) {
+          data.consent_given =
+            jsPsych.pluginAPI.compareKeys(
+              data.response,
+              "c"
+            );
+
+          if (!data.response_method) {
+            data.response_method =
+              "keyboard";
+          }
+
+          if (!data.consent_given) {
+            jsPsych.abortExperiment(
+              "<p>Thank you for your interest! You chose not to participate. " +
+              "You may close this window.</p>"
+            );
+          }
+        }
+      };
+
+      timeline.push(consentScreen);
+
+
+      // ==============================================================
+      // 5. TASK INSTRUCTIONS
+      // ==============================================================
+
+      var instructionsScreen = {
+        type: jsPsychHtmlKeyboardResponse,
+
+        stimulus: `
+          <div class="text-screen">
+            <h1>Instructions</h1>
+
+            <p>
+              In this experiment, you will be presented with words,
+              together with paraphrases of their meanings.
+            </p>
+
+            <p>
+              Your task is to rate how well each paraphrase describes
+              the meaning of the corresponding word, using a scale
+              from <strong>1</strong> to <strong>7</strong>.
+            </p>
+
+            <p>
+              Select <strong>1</strong> if the paraphrase does a very
+              poor job of describing the meaning—that is, if you do
+              not accept this meaning for the word at all.
+            </p>
+
+            <p>
+              Select <strong>7</strong> if the paraphrase does a
+              perfect job of describing the meaning—that is, if this
+              is the meaning you would normally associate with that
+              word.
+            </p>
+
+            <p>
+              Use the numbers in between to indicate intermediate
+              degrees of fit between these two endpoints, with lower
+              numbers indicating a poorer fit and higher numbers
+              indicating a better fit.
+            </p>
+
+            <p>
+              You will see buttons from 1 to 7 on the screen. You can
+              either use the mouse to click them or use your keyboard
+              to press the keys 1–7. Whichever method you choose,
+              please be consistent throughout the experiment. You can
+              test both during the practice section.
+            </p>
+
+            <p>
+              There are no correct answers, but please respond as
+              honestly and as quickly as possible. Do not take a long
+              time reasoning about the paraphrase.
+            </p>
+
+            <p>
+              The practice section will take approximately a couple of
+              minutes, and the main experiment will take approximately
+              15 minutes. The main experiment is divided into four
+              blocks, with three breaks.
+            </p>
+
+            <p>
+              Please complete the study in one session. Do not begin the
+              experiment if you do not have sufficient time to complete
+              it.
+            </p>
+
+            <p>
+              When you are done with the experiment, you will be asked to
+              fill out a survey about your language background.
+            </p>
+
+            <p>
+              Please remember that it is important that you respond as
+              quickly and accurately as possible.
+            </p>
+
+            <p class="continue-prompt">
+              Press any key to continue to the practice.
+            </p>
+          </div>
+        `,
+
+        data: {
+          task: "instructions"
+        }
+      };
+
+      timeline.push(instructionsScreen);
+
+
+      // ==============================================================
+      // 6. SIX PRACTICE ITEMS
+      // ==============================================================
+
+      /*
+       * Replace these examples with your actual practice items.
+       *
+       * There is no correct answer in a subjective rating task, so the
+       * practice does not use an accuracy threshold. Instead, participants
+       * see which rating they selected and can choose to repeat the practice.
+       */
+      var practiceStimuli = [
+        {
+          item_id: "practice_01",
+          word: "casa",
+          sentence:
+            "Lugar construído para as pessoas morarem."
+        },
+        {
+          item_id: "practice_02",
+          word: "correr",
+          sentence:
+            "Mover-se rapidamente usando as pernas."
+        },
+        {
+          item_id: "practice_03",
+          word: "silencioso",
+          sentence:
+            "Que produz pouco ou nenhum som."
+        },
+        {
+          item_id: "practice_04",
+          word: "janela",
+          sentence:
+            "Objeto usado principalmente para cortar papel."
+        },
+        {
+          item_id: "practice_05",
+          word: "feliz",
+          sentence:
+            "Que sente ou demonstra alegria."
+        },
+        {
+          item_id: "practice_06",
+          word: "escrever",
+          sentence:
+            "Produzir palavras por meio de sinais gráficos."
+        }
+      ];
+
+
+      var practiceIntro = {
+        type: jsPsychHtmlKeyboardResponse,
+
+        stimulus: `
+          <div class="text-screen">
+            <h1>Practice</h1>
+
+            <p>
+              You will now complete six practice trials.
+            </p>
+
+            <p>
+              After each trial, the screen will confirm
+              the rating you selected.
+            </p>
+
+            <p class="continue-prompt">
+              Press any key to begin the practice.
+            </p>
+          </div>
+        `,
+
+        data: {
+          task: "practice_instructions"
+        }
+      };
+
+
+      var practiceRatingTrial = {
+        type: jsPsychHtmlKeyboardResponse,
+
+        stimulus: function() {
+          return makeRatingHtml(
+            jsPsych.evaluateTimelineVariable(
+              "word"
+            ),
+            jsPsych.evaluateTimelineVariable(
+              "sentence"
+            )
+          );
+        },
+
+        choices: ["1", "2", "3", "4", "5", "6", "7"],
+
+        data: {
+          task: "practice_rating",
+          phase: "practice",
+          item_id:
+            jsPsych.timelineVariable(
+              "item_id"
+            ),
+          word:
+            jsPsych.timelineVariable(
+              "word"
+            ),
+          sentence:
+            jsPsych.timelineVariable(
+              "sentence"
+            )
+        },
+
+        on_load: activateRatingButtons,
+
+        on_finish: completeRatingData
+      };
+
+
+      var practiceFeedback = {
+        type: jsPsychHtmlKeyboardResponse,
+
+        stimulus: function() {
+          var lastRating =
+            jsPsych.data
+              .get()
+              .filter({
+                task: "practice_rating"
+              })
+              .last(1)
+              .values()[0];
+
+          return `
+            <p class="practice-feedback">
+              You selected
+              ${lastRating.rating}.
+            </p>
+          `;
+        },
+
+        choices: "NO_KEYS",
+
+        trial_duration:
+          PRACTICE_FEEDBACK_DURATION_MS,
+
+        data: {
+          task: "practice_feedback"
+        }
+      };
+
+
+      var practiceProcedure = {
+        timeline: [
+          practiceRatingTrial,
+          practiceFeedback
+        ],
+
+        timeline_variables:
+          practiceStimuli,
+
+        randomize_order: true
+      };
+
+
+      var practiceDecision = {
+        type: jsPsychHtmlKeyboardResponse,
+
+        stimulus: `
+          <div class="text-screen">
+            <h1>Practice complete</h1>
+
+            <p>
+              Press <strong>C</strong> if you understand
+              the task and are ready to continue.
+            </p>
+
+            <p>
+              Press <strong>R</strong> if you would like
+              to repeat the six practice trials.
+            </p>
+          </div>
+        `,
+
+        choices: ["c", "r"],
+
+        data: {
+          task: "practice_decision"
+        }
+      };
+
+
+      var practiceLoop = {
+        timeline: [
+          practiceIntro,
+          practiceProcedure,
+          practiceDecision
+        ],
+
+        loop_function: function(loopData) {
+          var decision =
+            loopData
+              .filter({
+                task: "practice_decision"
+              })
+              .last(1)
+              .values()[0];
+
+          return jsPsych.pluginAPI.compareKeys(
+            decision.response,
+            "r"
+          );
+        }
+      };
+
+      timeline.push(practiceLoop);
+
+
+      // ==============================================================
+      // 7. LOAD MAIN STIMULI
+      // ==============================================================
+
+      var loadedMainStimuli =
+        await loadMainStimuli(
+          MAIN_STIMULI_FILE
+        );
+
+      var mainStimuli =
+        loadedMainStimuli.stimuli;
+
+      var mainStimulusColumns =
+        loadedMainStimuli.headers;
+
+      var mainBlocks =
+        divideIntoFourBlocks(
+          mainStimuli
+        );
+
+
+      // ==============================================================
+      // 8. REAL-EXPERIMENT INTRODUCTION
+      // ==============================================================
+
+      var realExperimentStart = {
+        type: jsPsychHtmlKeyboardResponse,
+
+        stimulus: `
+          <div class="text-screen">
+            <h1>You are now ready for the main experiment!</h1>
+
+            <p>To participate effectively, please:</p>
+
+            <ul>
+              <li>Maximize your window.</li>
+              <li>Turn off your phone, notifications, and music.</li>
+              <li>Avoid distractions.</li>
+              <li>Avoid non-programmed breaks.</li>
+            </ul>
+
+            <p>
+              The practice feedback will no longer appear. Continue
+              rating each word–description pair from
+              <strong>1</strong> to <strong>7</strong>.
+            </p>
+
+            <p class="continue-prompt">
+              Press the space bar to begin.
+            </p>
+          </div>
+        `,
+
+        choices: [" "],
+
+        data: {
+          task: "real_experiment_start"
+        },
+
+        on_finish: function() {
+          jsPsych.progressBar.progress = 0;
+        }
+      };
+
+      timeline.push(realExperimentStart);
+
+
+      // ==============================================================
+      // 9. MAIN RATING TRIAL
+      // ==============================================================
+
+      /*
+       * Preserve every spreadsheet column in the output.
+       * Additional columns can be added freely to main_stimuli.csv.
+       */
+      var mainStimulusDataFields = {};
+
+      mainStimulusColumns.forEach(
+        function(columnName) {
+          mainStimulusDataFields[
+            columnName
+          ] =
+            jsPsych.timelineVariable(
+              columnName
+            );
+        }
+      );
+
+      [
+        "experimental_block",
+        "block_trial",
+        "randomized_trial_order"
+      ].forEach(function(columnName) {
+        mainStimulusDataFields[
+          columnName
+        ] =
+          jsPsych.timelineVariable(
+            columnName
+          );
+      });
+
+
+      var mainRatingTrial = {
+        type: jsPsychHtmlKeyboardResponse,
+
+        stimulus: function() {
+          return makeRatingHtml(
+            jsPsych.evaluateTimelineVariable(
+              "word"
+            ),
+            jsPsych.evaluateTimelineVariable(
+              "sentence"
+            )
+          );
+        },
+
+        choices: ["1", "2", "3", "4", "5", "6", "7"],
+
+        data: Object.assign(
+          {},
+          mainStimulusDataFields,
+          {
+            task: "main_rating",
+            phase: "main",
+            rating_question:
+              RATING_QUESTION,
+            low_endpoint_label:
+              LOW_ENDPOINT_LABEL,
+            high_endpoint_label:
+              HIGH_ENDPOINT_LABEL
+          }
+        ),
+
+        on_load: activateRatingButtons,
+
+        on_finish: completeRatingData
+      };
+
+
+      function makePauseScreen(
+        completedBlock
+      ) {
+        return {
+          type: jsPsychHtmlKeyboardResponse,
+
+          stimulus: `
+            <div class="text-screen">
+              <h1>Pause</h1>
+
+              <p>
+                You have completed block
+                ${completedBlock} of 4.
+              </p>
+
+              <p>
+                You may take a short break.
+              </p>
+
+              <p class="continue-prompt">
+                Press any key when you are ready
+                to continue.
+              </p>
+            </div>
+          `,
+
+          data: {
+            task: "pause",
+            block_completed:
+              completedBlock
+          },
+
+          on_load: function() {
+            jsPsych.progressBar.progress =
+              completedBlock / 4;
+          }
+        };
+      }
+
+
+      /*
+       * The spreadsheet is shuffled once and divided automatically into
+       * four nearly equal blocks. The resulting order is retained.
+       */
+      for (
+        var blockNumber = 1;
+        blockNumber <= 4;
+        blockNumber++
+      ) {
+        var stimuliForThisBlock =
+          mainBlocks[
+            blockNumber - 1
+          ];
+
+        timeline.push({
+          timeline: [
+            mainRatingTrial
+          ],
+
+          timeline_variables:
+            stimuliForThisBlock,
+
+          randomize_order: false
+        });
+
+        if (blockNumber < 4) {
+          timeline.push(
+            makePauseScreen(
+              blockNumber
+            )
+          );
+        }
+      }
+
+
+      // ==============================================================
+      // 10. FINAL SCREEN
+      // ==============================================================
+
+      var finalScreen = {
+        type: jsPsychHtmlKeyboardResponse,
+
+        stimulus: function() {
+          var completedRatings =
+            jsPsych.data
+              .get()
+              .filter({
+                task: "main_rating"
+              })
+              .count();
+
+          return `
+            <div class="text-screen">
+              <h1>The main task is complete</h1>
+
+              <p class="continue-prompt">
+                Press any key to continue to a final
+                language-background questionnaire.
+              </p>
+            </div>
+          `;
+        },
+
+        data: {
+          task: "final_summary"
+        },
+
+        on_load: function() {
+          jsPsych.progressBar.progress = 1;
+        }
+      };
+
+      timeline.push(finalScreen);
+
+
+      // ================================================================
+      // LANGUAGE-BACKGROUND AND DOMINANCE QUESTIONNAIRE
+      // ================================================================
+
+      function languageBackgroundSurveyHtml() {
+        return `
+          <form id="language-background-form" class="language-survey">
+            <h1>Language background questionnaire</h1>
+
+            <p class="language-survey-intro">
+              The following questions ask about your Brazilian Portuguese
+              language background, exposure to other languages, current
+              language use, and places where you have lived.
+            </p>
+
+            <p class="survey-required-note">
+              Fields marked with an asterisk (*) are required.
+            </p>
+
+            <div class="survey-question">
+              <fieldset>
+                <legend>Gender: *</legend>
+
+                <div class="survey-options">
+                  <label class="survey-option">
+                    <input type="radio" name="gender" value="Male" required>
+                    <span>Male</span>
+                  </label>
+
+                  <label class="survey-option">
+                    <input type="radio" name="gender" value="Female">
+                    <span>Female</span>
+                  </label>
+
+                  <label class="survey-option">
+                    <input type="radio" name="gender" value="Nonbinary">
+                    <span>Nonbinary</span>
+                  </label>
+
+                  <label class="survey-option">
+                    <input type="radio" name="gender" value="Other">
+                    <span>Other</span>
+                  </label>
+
+                  <label class="survey-option">
+                    <input
+                      type="radio"
+                      name="gender"
+                      value="I don't want to specify"
+                    >
+                    <span>I don’t want to specify</span>
+                  </label>
+                </div>
+
+                <div
+                  id="gender-other-details"
+                  class="conditional-survey"
+                >
+                  <label for="gender_other">
+                    Please specify:
+                  </label>
+
+                  <input
+                    id="gender_other"
+                    name="gender_other"
+                    type="text"
+                    data-required-when-visible="true"
+                    disabled
+                  >
+                </div>
+              </fieldset>
+            </div>
+
+            <div class="survey-inline-grid">
+              <div class="survey-question">
+                <label for="age">Age: *</label>
+
+                <input
+                  id="age"
+                  name="age"
+                  type="number"
+                  min="0"
+                  max="120"
+                  step="1"
+                  required
+                >
+              </div>
+
+              <div class="survey-question">
+                <label for="education">
+                  Highest level of education: *
+                </label>
+
+                <select id="education" name="education" required>
+                  <option value="">Select one</option>
+                  <option value="incomplete high school">
+                    Incomplete high school
+                  </option>
+                  <option value="complete high school">
+                    Complete high school
+                  </option>
+                  <option value="incomplete technical education">
+                    Incomplete technical education
+                  </option>
+                  <option value="complete technical education">
+                    Complete technical education
+                  </option>
+                  <option value="incomplete undergraduate education">
+                    Incomplete undergraduate education
+                  </option>
+                  <option value="complete undergraduate education">
+                    Complete undergraduate education
+                  </option>
+                  <option value="incomplete graduate education">
+                    Incomplete graduate education
+                  </option>
+                  <option value="complete graduate education">
+                    Complete graduate education
+                  </option>
+                </select>
+              </div>
+            </div>
+
+            <div class="survey-question">
+              <label for="daily_languages">
+                Which language(s) do you predominantly use in daily life? *
+              </label>
+
+              <input
+                id="daily_languages"
+                name="daily_languages"
+                type="text"
+                required
+              >
+            </div>
+
+            <div class="survey-question">
+              <fieldset>
+                <legend>
+                  Were you exposed to any other languages besides
+                  Brazilian Portuguese at home when growing up? *
+                </legend>
+
+                <div class="survey-options">
+                  <label class="survey-option">
+                    <input
+                      type="radio"
+                      name="home_other_language"
+                      value="yes"
+                      required
+                    >
+                    <span>Yes</span>
+                  </label>
+
+                  <label class="survey-option">
+                    <input
+                      type="radio"
+                      name="home_other_language"
+                      value="no"
+                    >
+                    <span>No</span>
+                  </label>
+                </div>
+
+                <div
+                  id="home-language-details"
+                  class="conditional-survey"
+                >
+                  <div class="survey-question-title">
+                    Please answer the following about the other
+                    language(s):
+                  </div>
+
+                  <label for="home_languages">
+                    Which language(s)?
+                  </label>
+
+                  <input
+                    id="home_languages"
+                    name="home_languages"
+                    type="text"
+                    data-required-when-visible="true"
+                    disabled
+                  >
+
+                  <label
+                    for="home_exposure_years"
+                    style="margin-top:16px;"
+                  >
+                    For approximately how many years were you exposed
+                    to this language?
+                  </label>
+
+                  <input
+                    id="home_exposure_years"
+                    name="home_exposure_years"
+                    type="number"
+                    min="0"
+                    max="120"
+                    step="0.5"
+                    data-required-when-visible="true"
+                    disabled
+                  >
+
+                  <label
+                    for="home_relative_use"
+                    style="margin-top:16px;"
+                  >
+                    Would you say you spoke this language more than,
+                    less than, or about the same amount as Brazilian
+                    Portuguese at home?
+                  </label>
+
+                  <select
+                    id="home_relative_use"
+                    name="home_relative_use"
+                    data-required-when-visible="true"
+                    disabled
+                  >
+                    <option value="">Select one</option>
+                    <option value="more than Brazilian Portuguese">
+                      More than Brazilian Portuguese
+                    </option>
+                    <option value="less than Brazilian Portuguese">
+                      Less than Brazilian Portuguese
+                    </option>
+                    <option value="about the same as Brazilian Portuguese">
+                      About the same as Brazilian Portuguese
+                    </option>
+                  </select>
+                </div>
+              </fieldset>
+            </div>
+
+            <div class="survey-question">
+              <fieldset>
+                <legend>
+                  Were you exposed to any other languages besides
+                  Brazilian Portuguese in a school or work
+                  environment? *
+                </legend>
+
+                <div class="survey-options">
+                  <label class="survey-option">
+                    <input
+                      type="radio"
+                      name="school_work_other_language"
+                      value="yes"
+                      required
+                    >
+                    <span>Yes</span>
+                  </label>
+
+                  <label class="survey-option">
+                    <input
+                      type="radio"
+                      name="school_work_other_language"
+                      value="no"
+                    >
+                    <span>No</span>
+                  </label>
+                </div>
+
+                <div
+                  id="school-work-language-details"
+                  class="conditional-survey"
+                >
+                  <div class="survey-question-title">
+                    Please answer the following about the other
+                    language(s):
+                  </div>
+
+                  <label for="school_work_languages">
+                    Which language(s)?
+                  </label>
+
+                  <input
+                    id="school_work_languages"
+                    name="school_work_languages"
+                    type="text"
+                    data-required-when-visible="true"
+                    disabled
+                  >
+
+                  <label
+                    for="school_work_exposure_years"
+                    style="margin-top:16px;"
+                  >
+                    For approximately how many years were you exposed
+                    to this language?
+                  </label>
+
+                  <input
+                    id="school_work_exposure_years"
+                    name="school_work_exposure_years"
+                    type="number"
+                    min="0"
+                    max="120"
+                    step="0.5"
+                    data-required-when-visible="true"
+                    disabled
+                  >
+
+                  <label
+                    for="school_work_relative_use"
+                    style="margin-top:16px;"
+                  >
+                    Would you say you spoke this language more than,
+                    less than, or about the same amount as Brazilian
+                    Portuguese in school or at work?
+                  </label>
+
+                  <select
+                    id="school_work_relative_use"
+                    name="school_work_relative_use"
+                    data-required-when-visible="true"
+                    disabled
+                  >
+                    <option value="">Select one</option>
+                    <option value="more than Brazilian Portuguese">
+                      More than Brazilian Portuguese
+                    </option>
+                    <option value="less than Brazilian Portuguese">
+                      Less than Brazilian Portuguese
+                    </option>
+                    <option value="about the same as Brazilian Portuguese">
+                      About the same as Brazilian Portuguese
+                    </option>
+                  </select>
+                </div>
+              </fieldset>
+            </div>
+
+            <div class="survey-inline-grid">
+              <div class="survey-question">
+                <label for="brazil_growing_up_years">
+                  For how many years did you live in Brazil when
+                  growing up? *
+                </label>
+
+                <input
+                  id="brazil_growing_up_years"
+                  name="brazil_growing_up_years"
+                  type="number"
+                  min="0"
+                  max="120"
+                  step="0.5"
+                  required
+                >
+              </div>
+
+              <div class="survey-question">
+                <label for="current_country">
+                  Which country do you currently live in? *
+                </label>
+
+                <input
+                  id="current_country"
+                  name="current_country"
+                  type="text"
+                  required
+                >
+
+                <label
+                  for="current_country_years"
+                  style="margin-top:16px;"
+                >
+                  For how many years have you lived in this country? *
+                </label>
+
+                <input
+                  id="current_country_years"
+                  name="current_country_years"
+                  type="number"
+                  min="0"
+                  max="120"
+                  step="0.5"
+                  required
+                >
+              </div>
+            </div>
+
+            <div class="survey-question">
+              <fieldset>
+                <legend>
+                  Have you lived in places where any other languages
+                  are spoken? *
+                </legend>
+
+                <div class="survey-options">
+                  <label class="survey-option">
+                    <input
+                      type="radio"
+                      name="lived_other_language_places"
+                      value="yes"
+                      required
+                    >
+                    <span>Yes</span>
+                  </label>
+
+                  <label class="survey-option">
+                    <input
+                      type="radio"
+                      name="lived_other_language_places"
+                      value="no"
+                    >
+                    <span>No</span>
+                  </label>
+                </div>
+
+                <div
+                  id="other-language-places-details"
+                  class="conditional-survey"
+                >
+                  <label for="other_language_places">
+                    Please describe the place(s) and language(s):
+                  </label>
+
+                  <textarea
+                    id="other_language_places"
+                    name="other_language_places"
+                    data-required-when-visible="true"
+                    disabled
+                  ></textarea>
+                </div>
+              </fieldset>
+            </div>
+
+            <div class="survey-question">
+              <label for="language_background_comments">
+                Do you have any other comments?
+              </label>
+
+              <textarea
+                id="language_background_comments"
+                name="language_background_comments"
+              ></textarea>
+            </div>
+
+            <div class="survey-submit-row">
+              <button
+                type="submit"
+                class="survey-submit-button"
+              >
+                Submit questionnaire and save data
+              </button>
+            </div>
+          </form>
+        `;
+      }
+
+
+      function configureConditionalSurveySection(
+        controllingName,
+        visibleValue,
+        containerId
+      ) {
+        var controls =
+          document.querySelectorAll(
+            'input[name="' +
+            controllingName +
+            '"]'
+          );
+
+        var container =
+          document.getElementById(
+            containerId
+          );
+
+        function updateSection() {
+          var selected =
+            document.querySelector(
+              'input[name="' +
+              controllingName +
+              '"]:checked'
+            );
+
+          var shouldShow =
+            selected &&
+            selected.value === visibleValue;
+
+          container.classList.toggle(
+            "visible",
+            Boolean(shouldShow)
+          );
+
+          container
+            .querySelectorAll(
+              "input, select, textarea"
+            )
+            .forEach(function(control) {
+              control.disabled =
+                !shouldShow;
+
+              control.required =
+                Boolean(shouldShow) &&
+                control.dataset
+                  .requiredWhenVisible ===
+                  "true";
+
+              if (!shouldShow) {
+                if (
+                  control.type === "radio" ||
+                  control.type === "checkbox"
+                ) {
+                  control.checked = false;
+                } else {
+                  control.value = "";
+                }
+              }
+            });
+        }
+
+        controls.forEach(function(control) {
+          control.addEventListener(
+            "change",
+            updateSection
+          );
+        });
+
+        updateSection();
+      }
+
+
+      function activateLanguageBackgroundSurvey() {
+        var surveyStartTime =
+          performance.now();
+
+        configureConditionalSurveySection(
+          "gender",
+          "Other",
+          "gender-other-details"
+        );
+
+        configureConditionalSurveySection(
+          "home_other_language",
+          "yes",
+          "home-language-details"
+        );
+
+        configureConditionalSurveySection(
+          "school_work_other_language",
+          "yes",
+          "school-work-language-details"
+        );
+
+        configureConditionalSurveySection(
+          "lived_other_language_places",
+          "yes",
+          "other-language-places-details"
+        );
+
+        var form =
+          document.getElementById(
+            "language-background-form"
+          );
+
+        form.addEventListener(
+          "submit",
+          function(event) {
+            event.preventDefault();
+
+            if (!form.reportValidity()) {
+              return;
+            }
+
+            var formData =
+              new FormData(form);
+
+            var trialData = {
+              task:
+                "language_background_survey",
+
+              phase:
+                "post_experiment_survey",
+
+              language_survey_rt:
+                Math.round(
+                  performance.now() -
+                  surveyStartTime
+                )
+            };
+
+            [
+              "gender",
+              "gender_other",
+              "age",
+              "education",
+              "daily_languages",
+              "home_other_language",
+              "home_languages",
+              "home_exposure_years",
+              "home_relative_use",
+              "school_work_other_language",
+              "school_work_languages",
+              "school_work_exposure_years",
+              "school_work_relative_use",
+              "brazil_growing_up_years",
+              "current_country",
+              "current_country_years",
+              "lived_other_language_places",
+              "other_language_places",
+              "language_background_comments"
+            ].forEach(function(fieldName) {
+              trialData[
+                "language_" + fieldName
+              ] =
+                formData.get(fieldName) || "";
+            });
+
+            jsPsych.finishTrial(
+              trialData
+            );
+          },
+          { once: true }
+        );
+      }
+
+
+      var languageBackgroundSurvey = {
+        type:
+          jsPsychHtmlKeyboardResponse,
+
+        stimulus:
+          languageBackgroundSurveyHtml,
+
+        choices:
+          "NO_KEYS",
+
+        on_load:
+          activateLanguageBackgroundSurvey,
+
+        data: {
+          task:
+            "language_background_survey"
+        }
+      };
+
+      timeline.push(
+        languageBackgroundSurvey
+      );
+
+      // ==============================================================
+      // 12. SAVE LOCALLY OR THROUGH DATAPIPE
+      // ==============================================================
+
+      if (IS_LOCAL_RUN) {
+        var localSaveBlock = {
+          type: jsPsychHtmlKeyboardResponse,
+
+          stimulus:
+            '<p style="font-size:24px;">' +
+            'Please hang tight, we are saving your data...' +
+            '</p>',
+
+          choices: "NO_KEYS",
+
+          on_load: function() {
+            var csvData =
+              jsPsych.data
+                .get()
+                .ignore("stimulus")
+                .csv();
+
+            saveData(
+              dataFileStem,
+              csvData
+            )
+              .then(function() {
+                var displayElement =
+                  document.querySelector(
+                    "#jspsych-content"
+                  ) ||
+                  jsPsych.getDisplayElement();
+
+                displayElement.innerHTML =
+                  '<p style="font-size:24px;">' +
+                  'Data saved successfully!' +
+                  '</p>' +
+                  '<p>You can close this window now.</p>';
+              })
+              .catch(function(error) {
+                console.error(
+                  "Local saving error:",
+                  error
+                );
+
+                var displayElement =
+                  document.querySelector(
+                    "#jspsych-content"
+                  ) ||
+                  jsPsych.getDisplayElement();
+
+                displayElement.innerHTML =
+                  '<p style="font-size:24px;">' +
+                  'The local data could not be saved.' +
+                  '</p>' +
+                  '<p>' +
+                  escapeHtml(error.message) +
+                  '</p>';
+              });
+          }
+        };
+
+        timeline.push(localSaveBlock);
+      } else {
+        var dataPipeSaveTrial = {
+          type: jsPsychPipe,
+          action: "save",
+          experiment_id:
+            DATAPIPE_EXPERIMENT_ID,
+          filename:
+            dataFileStem + ".csv",
+
+          data_string: function() {
+            return jsPsych.data
+              .get()
+              .ignore("stimulus")
+              .csv();
+          },
+
+          data: {
+            task: "datapipe_save"
+          }
+        };
+
+        timeline.push(
+          dataPipeSaveTrial
+        );
+
+        timeline.push({
+          type:
+            jsPsychHtmlKeyboardResponse,
+
+          stimulus:
+            '<p style="font-size:24px;">' +
+            'Data saved successfully.' +
+            '</p>' +
+            '<p>You can close this window.</p>',
+
+          choices: "NO_KEYS",
+
+          data: {
+            task:
+              "online_save_confirmation"
+          }
+        });
+      }
+
+
+      // ==============================================================
+      // 13. START
+      // ==============================================================
+
+      jsPsych.run(timeline);
+    }
+
+
+    startExperiment().catch(
+      function(error) {
+        console.error(
+          "Experiment startup error:",
+          error
+        );
+
+        document.body.innerHTML = `
+          <main style="
+            max-width:850px;
+            margin:60px auto;
+            padding:30px;
+            color:white;
+            font-family:Arial,sans-serif;
+            line-height:1.5;
+          ">
+            <h1>Experiment could not start</h1>
+
+            <p>
+              ${String(error.message)
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")}
+            </p>
+
+            <p>
+              Confirm that main_stimuli.csv is in
+              the same folder as exp1.html and
+              that the experiment is being opened
+              through a server.
+            </p>
+          </main>
+        `;
+      }
+    );
+  </script>
+</html>

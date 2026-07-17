@@ -1,0 +1,9 @@
+item_id,block,condition,word,sentence
+main_001,1,good_match,casa,Lugar construído para as pessoas morarem.
+main_002,1,poor_match,janela,Objeto usado principalmente para cortar papel.
+main_003,2,good_match,correr,Mover-se rapidamente usando as pernas.
+main_004,2,poor_match,livro,Recipiente usado para beber água.
+main_005,3,good_match,feliz,Que sente ou demonstra alegria.
+main_006,3,poor_match,silencioso,Que produz uma quantidade muito alta de som.
+main_007,4,good_match,escrever,Produzir palavras por meio de sinais gráficos.
+main_008,4,poor_match,verde,Que possui a cor normalmente associada ao céu sem nuvens.

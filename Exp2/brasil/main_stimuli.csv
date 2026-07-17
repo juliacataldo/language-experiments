@@ -1,0 +1,13 @@
+﻿item_id,block,condition,prime,target,lexicality,correct_response
+main_001,1,example_condition_A,house,HOUSE,word,j
+main_002,1,example_condition_B,bread,BREAD,word,j
+main_003,1,example_nonword,florp,FLORP,nonword,f
+main_004,2,example_condition_A,table,TABLE,word,j
+main_005,2,example_condition_B,green,GREEN,word,j
+main_006,2,example_nonword,blint,BLINT,nonword,f
+main_007,3,example_condition_A,music,MUSIC,word,j
+main_008,3,example_condition_B,water,WATER,word,j
+main_009,3,example_nonword,dremp,DREMP,nonword,f
+main_010,4,example_condition_A,light,LIGHT,word,j
+main_011,4,example_nonword,glusk,GLUSK,nonword,f
+main_012,4,example_nonword,prost,PROST,nonword,f
