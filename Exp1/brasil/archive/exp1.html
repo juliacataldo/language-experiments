@@ -324,6 +324,8 @@
       var LOW_ENDPOINT_LABEL = "1 — Very poor fit";
       var HIGH_ENDPOINT_LABEL = "7 — Perfect fit";
 
+      var PRACTICE_FEEDBACK_DURATION_MS = 900;
+
       /*
        * Upload the approved consent PDF to the same folder as this file
        * and name it consent.pdf. Change this value only if you use a
@@ -337,7 +339,6 @@
        * Replace the DataPipe placeholder before putting the experiment
        * online. Do not put your private OSF token in this file.
        */
-      var PRACTICE_STIMULI_FILE = "practice_stimuli.csv";
       var MAIN_STIMULI_FILE = "main_stimuli.csv";
       var DATAPIPE_EXPERIMENT_ID =
         "O7bfIHuan3Jc";
@@ -363,7 +364,7 @@
 
       if (window.location.protocol === "file:") {
         throw new Error(
-          "This experiment loads practice_stimuli.csv and main_stimuli.csv. Run it through " +
+          "This experiment loads main_stimuli.csv. Run it through " +
           "http://localhost:8000/ instead of double-clicking exp1.html."
         );
       }
@@ -654,145 +655,6 @@
           headers: headers,
           stimuli: stimuli
         };
-      }
-
-
-      async function loadPracticeStimuli(filename) {
-        var response =
-          await fetch(
-            filename,
-            { cache: "no-store" }
-          );
-
-        if (!response.ok) {
-          throw new Error(
-            "Could not load " +
-            filename +
-            ". The server returned HTTP " +
-            response.status +
-            "."
-          );
-        }
-
-        var csvText = await response.text();
-        var parsedRows = parseCSV(csvText);
-
-        if (parsedRows.length !== 4) {
-          throw new Error(
-            filename +
-            " must contain exactly three practice rows plus one header row."
-          );
-        }
-
-        var headers =
-          parsedRows[0].map(function(header) {
-            return header
-              .replace(/^\uFEFF/, "")
-              .trim();
-          });
-
-        var requiredColumns = [
-          "item_id",
-          "word",
-          "sentence",
-          "accepted_ratings",
-          "correct_feedback",
-          "incorrect_feedback"
-        ];
-
-        requiredColumns.forEach(
-          function(columnName) {
-            if (!headers.includes(columnName)) {
-              throw new Error(
-                filename +
-                ' is missing the required column "' +
-                columnName +
-                '".'
-              );
-            }
-          }
-        );
-
-        var stimuli =
-          parsedRows
-            .slice(1)
-            .map(function(values, rowIndex) {
-              var item = {};
-
-              headers.forEach(
-                function(header, columnIndex) {
-                  item[header] =
-                    String(
-                      values[columnIndex] || ""
-                    ).trim();
-                }
-              );
-
-              if (
-                !item.item_id ||
-                !item.word ||
-                !item.sentence ||
-                !item.accepted_ratings ||
-                !item.correct_feedback ||
-                !item.incorrect_feedback
-              ) {
-                throw new Error(
-                  "CSV row " +
-                  (rowIndex + 2) +
-                  " has a blank required practice field."
-                );
-              }
-
-              var acceptedRatings =
-                item.accepted_ratings
-                  .split("|")
-                  .map(function(value) {
-                    return Number(
-                      value.trim()
-                    );
-                  });
-
-              if (
-                acceptedRatings.length === 0 ||
-                acceptedRatings.some(
-                  function(value) {
-                    return (
-                      !Number.isInteger(value) ||
-                      value < 1 ||
-                      value > 7
-                    );
-                  }
-                )
-              ) {
-                throw new Error(
-                  "CSV row " +
-                  (rowIndex + 2) +
-                  ' has invalid accepted_ratings. Use values such as "5|6|7".'
-                );
-              }
-
-              item.accepted_ratings =
-                acceptedRatings.join("|");
-
-              return item;
-            });
-
-        var itemIds =
-          stimuli.map(function(item) {
-            return item.item_id;
-          });
-
-        if (
-          new Set(itemIds).size !==
-          itemIds.length
-        ) {
-          throw new Error(
-            filename +
-            " contains duplicate practice item_id values."
-          );
-        }
-
-        return stimuli;
       }
 
 
@@ -1227,27 +1089,54 @@
 
 
       // ==============================================================
-      // 6. THREE PRACTICE ITEMS WITH ITEM-SPECIFIC FEEDBACK
+      // 6. SIX PRACTICE ITEMS
       // ==============================================================
 
       /*
-       * The practice items are loaded from practice_stimuli.csv.
+       * Replace these examples with your actual practice items.
        *
-       * Required columns:
-       * item_id
-       * word
-       * sentence
-       * accepted_ratings
-       * correct_feedback
-       * incorrect_feedback
-       *
-       * Write accepted ratings with vertical bars, for example:
-       * 5|6|7
+       * There is no correct answer in a subjective rating task, so the
+       * practice does not use an accuracy threshold. Instead, participants
+       * see which rating they selected and can choose to repeat the practice.
        */
-      var practiceStimuli =
-        await loadPracticeStimuli(
-          PRACTICE_STIMULI_FILE
-        );
+      var practiceStimuli = [
+        {
+          item_id: "practice_01",
+          word: "casa",
+          sentence:
+            "Lugar construído para as pessoas morarem"
+        },
+        {
+          item_id: "practice_02",
+          word: "correr",
+          sentence:
+            "Mover-se rapidamente usando as pernas"
+        },
+        {
+          item_id: "practice_03",
+          word: "silencioso",
+          sentence:
+            "Que produz pouco ou nenhum som"
+        },
+        {
+          item_id: "practice_04",
+          word: "janela",
+          sentence:
+            "Objeto usado principalmente para cortar papel"
+        },
+        {
+          item_id: "practice_05",
+          word: "feliz",
+          sentence:
+            "Que sente ou demonstra alegria"
+        },
+        {
+          item_id: "practice_06",
+          word: "escrever",
+          sentence:
+            "Produzir palavras por meio de sinais gráficos"
+        }
+      ];
 
 
       var practiceIntro = {
@@ -1258,12 +1147,12 @@
             <h1>Practice</h1>
 
             <p>
-              You will now complete three practice trials.
+              You will now complete six practice trials.
             </p>
 
             <p>
-              After each response, you will receive feedback explaining
-              whether you used the scale as intended for that example.
+              After each trial, the screen will confirm
+              the rating you selected.
             </p>
 
             <p class="continue-prompt">
@@ -1297,55 +1186,23 @@
         data: {
           task: "practice_rating",
           phase: "practice",
-
           item_id:
             jsPsych.timelineVariable(
               "item_id"
             ),
-
           word:
             jsPsych.timelineVariable(
               "word"
             ),
-
           sentence:
             jsPsych.timelineVariable(
               "sentence"
-            ),
-
-          accepted_ratings:
-            jsPsych.timelineVariable(
-              "accepted_ratings"
-            ),
-
-          correct_feedback:
-            jsPsych.timelineVariable(
-              "correct_feedback"
-            ),
-
-          incorrect_feedback:
-            jsPsych.timelineVariable(
-              "incorrect_feedback"
             )
         },
 
         on_load: activateRatingButtons,
 
-        on_finish: function(data) {
-          completeRatingData(data);
-
-          var acceptedRatings =
-            String(data.accepted_ratings)
-              .split("|")
-              .map(function(value) {
-                return Number(value);
-              });
-
-          data.practice_correct =
-            acceptedRatings.includes(
-              Number(data.rating)
-            );
-        }
+        on_finish: completeRatingData
       };
 
 
@@ -1362,31 +1219,18 @@
               .last(1)
               .values()[0];
 
-          var feedbackText =
-            lastRating.practice_correct
-              ? lastRating.correct_feedback
-              : lastRating.incorrect_feedback;
-
           return `
-            <div class="text-screen">
-              <p class="practice-feedback">
-                ${escapeHtml(feedbackText)
-                  .replace(/\n/g, "<br>")}
-              </p>
-
-              <p>
-                Your response was
-                <strong>${lastRating.rating}</strong>.
-              </p>
-
-              <p class="continue-prompt">
-                Press any key to continue.
-              </p>
-            </div>
+            <p class="practice-feedback">
+              You selected
+              ${lastRating.rating}
+            </p>
           `;
         },
 
-        choices: "ALL_KEYS",
+        choices: "NO_KEYS",
+
+        trial_duration:
+          PRACTICE_FEEDBACK_DURATION_MS,
 
         data: {
           task: "practice_feedback"
@@ -1403,11 +1247,7 @@
         timeline_variables:
           practiceStimuli,
 
-        /*
-         * Practice order follows the spreadsheet, allowing the examples
-         * to form a deliberate teaching sequence.
-         */
-        randomize_order: false
+        randomize_order: true
       };
 
 
@@ -1425,7 +1265,7 @@
 
             <p>
               Press <strong>R</strong> if you would like
-              to repeat the three practice trials.
+              to repeat the six practice trials.
             </p>
           </div>
         `,
@@ -2502,9 +2342,10 @@
             </p>
 
             <p>
-              Confirm that practice_stimuli.csv and main_stimuli.csv
-              are in the same folder as exp1.html and that the
-              experiment is being opened through a server.
+              Confirm that main_stimuli.csv is in
+              the same folder as exp1.html and
+              that the experiment is being opened
+              through a server.
             </p>
           </main>
         `;
