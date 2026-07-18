@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-    <title>Semantic Norming Experiment</title>
+    <title>Language Experiment</title>
 
     <!-- jsPsych core files from your existing local jspsych folder -->
     <script src="jspsych/jspsych.js"></script>
@@ -2159,7 +2159,8 @@
 
             <div class="survey-submit-row">
               <button
-                type="submit"
+                id="language-survey-submit"
+                type="button"
                 class="survey-submit-button"
               >
                 Submit questionnaire and save data
@@ -2275,14 +2276,48 @@
             "language-background-form"
           );
 
-        form.addEventListener(
-          "submit",
-          function(event) {
-            event.preventDefault();
+        var submitButton =
+          document.getElementById(
+            "language-survey-submit"
+          );
 
+        /*
+        * Prevent Enter inside a questionnaire field from
+        * submitting the form accidentally.
+        *
+        * Enter remains available inside textareas so that
+        * participants can create a new line.
+        */
+        form.addEventListener(
+          "keydown",
+          function(event) {
+            if (
+              event.key === "Enter" &&
+              event.target.tagName !== "TEXTAREA"
+            ) {
+              event.preventDefault();
+            }
+          }
+        );
+
+        submitButton.addEventListener(
+          "click",
+          function() {
+            /*
+            * Do not continue until all required fields
+            * have valid responses.
+            */
             if (!form.reportValidity()) {
               return;
             }
+
+            /*
+            * Prevent repeated clicks while the trial
+            * is being completed.
+            */
+            submitButton.disabled = true;
+            submitButton.textContent =
+              "Submitting questionnaire...";
 
             var formData =
               new FormData(form);
@@ -2331,8 +2366,7 @@
             jsPsych.finishTrial(
               trialData
             );
-          },
-          { once: true }
+          }
         );
       }
 
