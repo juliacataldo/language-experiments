@@ -2291,12 +2291,25 @@
         form.addEventListener(
           "keydown",
           function(event) {
+            /*
+             * Keep typing inside the questionnaire from reaching
+             * jsPsych's document-level keyboard listener.
+             */
+            event.stopPropagation();
+
             if (
               event.key === "Enter" &&
               event.target.tagName !== "TEXTAREA"
             ) {
               event.preventDefault();
             }
+          }
+        );
+
+        form.addEventListener(
+          "keyup",
+          function(event) {
+            event.stopPropagation();
           }
         );
 
@@ -2378,8 +2391,20 @@
         stimulus:
           languageBackgroundSurveyHtml,
 
+        /*
+         * Do not allow any keyboard event to end this trial.
+         * The questionnaire advances only when the participant
+         * clicks the dedicated submit button, whose listener calls
+         * jsPsych.finishTrial().
+         */
         choices:
           "NO_KEYS",
+
+        response_ends_trial:
+          false,
+
+        trial_duration:
+          null,
 
         on_load:
           activateLanguageBackgroundSurvey,
