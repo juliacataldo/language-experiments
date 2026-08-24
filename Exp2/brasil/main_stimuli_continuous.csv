@@ -1,0 +1,5 @@
+pair_id,condition,prime_item_id,prime,prime_lexicality,prime_correct_response,target_item_id,target,target_lexicality,target_correct_response,list,notes
+pair_001,related,p001_prime,CASA,word,j,p001_target,LAR,word,j,A,example pair
+pair_002,unrelated,p002_prime,LIVRO,word,j,p002_target,VERDE,word,j,A,example pair
+pair_003,related,p003_prime,MESA,word,j,p003_target,CADEIRA,word,j,A,example pair
+pair_004,unrelated,p004_prime,JANELA,word,j,p004_target,NIMPO,nonword,f,A,example pair

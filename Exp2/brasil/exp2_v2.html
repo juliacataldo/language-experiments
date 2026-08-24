@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-    <title>Language Experiment</title>
+    <title>Continuous Lexical Decision Experiment</title>
 
     <!-- jsPsych core files -->
     <script src="jspsych/jspsych.js"></script>
@@ -18,8 +18,8 @@
 
     <!--
       jspsych-psychophysics v5.1.0: compatible with jsPsych 8.2.x.
-      This plugin draws the mask, prime, and target on one canvas using
-      requestAnimationFrame, synchronized with the monitor refresh.
+      This plugin controls the fixation, blank interval, and lexical-decision
+      stimulus using requestAnimationFrame, synchronized with the monitor.
     -->
     <script src="https://unpkg.com/@kurokida/jspsych-psychophysics@5.1.0/dist/index.browser.min.js"></script>
 
@@ -67,8 +67,9 @@
       }
 
       /*
-       * Mask, prime, and target font properties are set in the psychophysics
-       * canvas objects below. Canvas text does not use ordinary CSS classes.
+       * Fixation and lexical-decision stimulus properties are set in the
+       * psychophysics canvas objects below. Canvas text does not use ordinary
+       * CSS classes.
        */
 
       .feedback-correct {
@@ -222,15 +223,29 @@
     // ================================================================
 
     /*
-     * These constants let you change the experiment's timing in one place.
-     * The psychophysics plugin schedules these transitions with
-     * requestAnimationFrame. The target has no end time, so it remains visible
-     * until the participant presses F or J.
+     * Continuous lexical-decision timing.
+     *
+     * Every spreadsheet row is one prime-target pair. Both the prime and the
+     * target become ordinary lexical-decision trials, so the participant must
+     * press F or J for every displayed letter string.
+     *
+     * Trial sequence:
+     *   fixation: 500 ms
+     *   blank:    200 ms
+     *   stimulus: 550 ms (responses remain possible after it disappears)
+     *   response deadline: 2000 ms from stimulus onset
+     *   post-response interval: randomly 650, 700, or 750 ms
      */
-    var MASK_DURATION_MS = 500;
-    var PRIME_DURATION_MS = 56;
+    var FIXATION_DURATION_MS = 500;
+    var PRE_STIMULUS_BLANK_MS = 200;
+    var STIMULUS_DURATION_MS = 550;
+    var RESPONSE_DEADLINE_MS = 2000;
+    var ITI_OPTIONS_MS = [650, 700, 750];
     var FEEDBACK_DURATION_MS = 750;
     var PRACTICE_PASS_THRESHOLD = 0.80;
+
+    var STIMULUS_ONSET_MS =
+      FIXATION_DURATION_MS + PRE_STIMULUS_BLANK_MS;
 
     /*
      * Upload the approved consent PDF to the same folder as this file
@@ -239,14 +254,10 @@
     var CONSENT_PDF_FILE = "consent.pdf";
 
     /*
-     * EDIT THESE TWO VALUES:
-     * 1. Keep main_stimuli.csv in the same folder as this HTML file.
-     * 2. Replace the placeholder with the Experiment ID from DataPipe.
-     *
-     * Do NOT paste your OSF token here. The token belongs only in your
-     * private DataPipe account settings.
+     * Keep main_stimuli_continuous.csv in the same folder as this HTML file.
+     * Each row of that CSV must describe one complete prime-target pair.
      */
-    var MAIN_STIMULI_FILE = "main_stimuli.csv";
+    var MAIN_STIMULI_FILE = "main_stimuli_continuous.csv";
     var DATAPIPE_EXPERIMENT_ID = "0Zb0XHTy8RcV";
 
     /*
@@ -261,9 +272,9 @@
 
     if (window.location.protocol === "file:") {
       throw new Error(
-        "This version loads its stimuli from main_stimuli.csv. " +
+        "This version loads its stimuli from " + MAIN_STIMULI_FILE + ". " +
         "Please run it through the Python server at " +
-        "http://localhost:8000/ rather than double-clicking exp2.html."
+        "http://localhost:8000/ rather than double-clicking the HTML file."
       );
     }
 
@@ -281,52 +292,28 @@
 
     var jsPsych = initJsPsych({
       show_progress_bar: true,
-
-      /*
-       * We update the progress bar manually after each experimental block.
-       * This prevents repeated practice attempts from distorting the bar.
-       */
       auto_update_progress_bar: false,
       message_progress_bar: "Experiment progress"
     });
 
     var timeline = [];
 
-    /*
-     * Generate a new random eight-digit participant number for every run.
-     * URL parameters, including Prolific IDs, are deliberately ignored.
-     */
     function generateRandomEightDigitId() {
-      if (
-        window.crypto &&
-        window.crypto.getRandomValues
-      ) {
-        var randomValues =
-          new Uint32Array(1);
-
-        window.crypto.getRandomValues(
-          randomValues
-        );
+      if (window.crypto && window.crypto.getRandomValues) {
+        var randomValues = new Uint32Array(1);
+        window.crypto.getRandomValues(randomValues);
 
         return String(
-          10000000 +
-          (
-            randomValues[0] %
-            90000000
-          )
+          10000000 + (randomValues[0] % 90000000)
         );
       }
 
       return String(
-        Math.floor(
-          10000000 +
-          Math.random() * 90000000
-        )
+        Math.floor(10000000 + Math.random() * 90000000)
       );
     }
 
-    var participantId =
-      generateRandomEightDigitId();
+    var participantId = generateRandomEightDigitId();
 
     var sessionTimestamp = new Date()
       .toISOString()
@@ -334,7 +321,7 @@
       .slice(0, 14);
 
     var dataFileStem =
-      "masked_priming_" +
+      "continuous_lexical_decision_" +
       participantId +
       "_" +
       sessionTimestamp;
@@ -342,7 +329,9 @@
     jsPsych.data.addProperties({
       participant_id: participantId,
       run_mode: RUN_MODE,
-      session_timestamp_utc: sessionTimestamp
+      session_timestamp_utc: sessionTimestamp,
+      experiment_paradigm: "continuous_lexical_decision",
+      prime_target_lag_trials: 1
     });
 
 
@@ -350,15 +339,11 @@
     // 2. HELPER FUNCTIONS
     // ================================================================
 
-    /*
-     * Create a centered text object for the psychophysics canvas.
-     * showEndTime may be omitted so that the target remains visible until
-     * the participant responds.
-     */
     function makePsychophysicsText(
       content,
       showStartTime,
-      showEndTime
+      showEndTime,
+      fontSize
     ) {
       var stimulus = {
         obj_type: "text",
@@ -366,7 +351,7 @@
         startX: 0,
         startY: 0,
         origin_center: true,
-        fontSize: "48px",
+        fontSize: fontSize || "48px",
         fontFamily: "Courier New, Courier, monospace",
         fontWeight: "bold",
         text_color: "#ffffff",
@@ -393,6 +378,11 @@
       return numberCorrect / total;
     }
 
+    function chooseRandomValue(values) {
+      return values[
+        Math.floor(Math.random() * values.length)
+      ];
+    }
 
     /*
      * Parse an ordinary comma-delimited CSV, including quoted fields and
@@ -448,7 +438,7 @@
       return rows;
     }
 
-    async function loadMainStimuli(filename) {
+    async function loadMainPairs(filename) {
       var response = await fetch(filename, { cache: "no-store" });
 
       if (!response.ok) {
@@ -463,7 +453,7 @@
 
       if (parsedRows.length < 2) {
         throw new Error(
-          filename + " must contain a header row and at least one stimulus."
+          filename + " must contain a header row and at least one pair."
         );
       }
 
@@ -484,12 +474,16 @@
       }
 
       var requiredColumns = [
-        "item_id",
+        "pair_id",
         "condition",
+        "prime_item_id",
         "prime",
+        "prime_lexicality",
+        "prime_correct_response",
+        "target_item_id",
         "target",
-        "lexicality",
-        "correct_response"
+        "target_lexicality",
+        "target_correct_response"
       ];
 
       requiredColumns.forEach(function(columnName) {
@@ -501,126 +495,169 @@
         }
       });
 
-      var stimuli = parsedRows.slice(1).map(function(values, rowIndex) {
-        var item = {};
+      var pairs = parsedRows.slice(1).map(function(values, rowIndex) {
+        var pair = {};
 
         headers.forEach(function(header, columnIndex) {
-          item[header] = String(values[columnIndex] || "").trim();
+          pair[header] = String(values[columnIndex] || "").trim();
         });
 
-        item.lexicality = item.lexicality.toLowerCase();
-        item.correct_response = item.correct_response.toLowerCase();
+        pair.prime_lexicality = pair.prime_lexicality.toLowerCase();
+        pair.target_lexicality = pair.target_lexicality.toLowerCase();
+        pair.prime_correct_response =
+          pair.prime_correct_response.toLowerCase();
+        pair.target_correct_response =
+          pair.target_correct_response.toLowerCase();
 
-        if (!item.item_id || !item.prime || !item.target) {
-          throw new Error(
-            "CSV row " + (rowIndex + 2) +
-            " has a blank item_id, prime, or target."
-          );
-        }
+        [
+          "pair_id",
+          "condition",
+          "prime_item_id",
+          "prime",
+          "target_item_id",
+          "target"
+        ].forEach(function(columnName) {
+          if (!pair[columnName]) {
+            throw new Error(
+              "CSV row " + (rowIndex + 2) +
+              " has a blank value in \"" + columnName + "\"."
+            );
+          }
+        });
 
-        if (!["word", "nonword"].includes(item.lexicality)) {
-          throw new Error(
-            "CSV row " + (rowIndex + 2) +
-            " has lexicality \"" + item.lexicality +
-            "\". Use word or nonword."
-          );
-        }
+        ["prime_lexicality", "target_lexicality"].forEach(
+          function(columnName) {
+            if (!['word', 'nonword'].includes(pair[columnName])) {
+              throw new Error(
+                "CSV row " + (rowIndex + 2) +
+                " has " + columnName + " \"" + pair[columnName] +
+                "\". Use word or nonword."
+              );
+            }
+          }
+        );
 
-        if (!["f", "j"].includes(item.correct_response)) {
-          throw new Error(
-            "CSV row " + (rowIndex + 2) +
-            " has correct_response \"" + item.correct_response +
-            "\". Use f or j."
-          );
-        }
+        ["prime_correct_response", "target_correct_response"].forEach(
+          function(columnName) {
+            if (!["f", "j"].includes(pair[columnName])) {
+              throw new Error(
+                "CSV row " + (rowIndex + 2) +
+                " has " + columnName + " \"" + pair[columnName] +
+                "\". Use f or j."
+              );
+            }
+          }
+        );
 
-        return item;
+        return pair;
       });
 
-      var itemIds = stimuli.map(function(item) { return item.item_id; });
+      var pairIds = pairs.map(function(pair) { return pair.pair_id; });
+      if (new Set(pairIds).size !== pairIds.length) {
+        throw new Error(
+          filename + " contains duplicate pair_id values."
+        );
+      }
+
+      var itemIds = [];
+      pairs.forEach(function(pair) {
+        itemIds.push(pair.prime_item_id, pair.target_item_id);
+      });
+
       if (new Set(itemIds).size !== itemIds.length) {
         throw new Error(
-          filename + " contains duplicate item_id values."
+          filename + " contains duplicate prime_item_id or target_item_id values."
         );
       }
 
       return {
         headers: headers,
-        stimuli: stimuli
+        pairs: pairs
       };
     }
 
-
     /*
-     * Shuffle the complete stimulus list and divide it into four blocks
-     * that differ in size by at most one trial. No block column is needed
-     * in the spreadsheet.
+     * Shuffle complete prime-target pairs and divide the pairs into four
+     * blocks. Prime and target are never separated or independently shuffled.
      */
-    function divideIntoFourBlocks(stimuli) {
-      if (stimuli.length < 4) {
+    function dividePairsIntoFourBlocks(pairs) {
+      if (pairs.length < 4) {
         throw new Error(
-          "The main stimulus spreadsheet must contain at least four trials."
+          "The main spreadsheet must contain at least four prime-target pairs."
         );
       }
 
-      var shuffledStimuli =
-        jsPsych.randomization.shuffle(
-          stimuli.slice()
-        );
+      var shuffledPairs =
+        jsPsych.randomization.shuffle(pairs.slice());
 
       var blocks = [[], [], [], []];
-      var baseBlockSize =
-        Math.floor(
-          shuffledStimuli.length / 4
-        );
-      var remainder =
-        shuffledStimuli.length % 4;
-      var stimulusIndex = 0;
-      var overallOrder = 1;
+      var baseBlockSize = Math.floor(shuffledPairs.length / 4);
+      var remainder = shuffledPairs.length % 4;
+      var pairIndex = 0;
+      var overallPairOrder = 1;
+      var overallTrialOrder = 1;
 
-      for (
-        var blockIndex = 0;
-        blockIndex < 4;
-        blockIndex++
-      ) {
+      for (var blockIndex = 0; blockIndex < 4; blockIndex++) {
         var thisBlockSize =
-          baseBlockSize +
-          (
-            blockIndex < remainder
-              ? 1
-              : 0
-          );
+          baseBlockSize + (blockIndex < remainder ? 1 : 0);
+        var blockTrialNumber = 1;
 
         for (
-          var position = 1;
-          position <= thisBlockSize;
-          position++
+          var blockPairPosition = 1;
+          blockPairPosition <= thisBlockSize;
+          blockPairPosition++
         ) {
-          blocks[blockIndex].push(
-            Object.assign(
-              {},
-              shuffledStimuli[
-                stimulusIndex
-              ],
-              {
-                experimental_block:
-                  blockIndex + 1,
-                block_trial:
-                  position,
-                randomized_trial_order:
-                  overallOrder
-              }
-            )
-          );
+          var pair = shuffledPairs[pairIndex];
 
-          stimulusIndex++;
-          overallOrder++;
+          var sharedOrderData = {
+            experimental_block: blockIndex + 1,
+            block_pair_position: blockPairPosition,
+            randomized_pair_order: overallPairOrder
+          };
+
+          var primeTrial = Object.assign({}, pair, sharedOrderData, {
+            pair_role: "prime",
+            pair_trial_position: 1,
+            item_id: pair.prime_item_id,
+            stimulus: pair.prime,
+            lexicality: pair.prime_lexicality,
+            correct_response: pair.prime_correct_response,
+            paired_item_id: pair.target_item_id,
+            paired_stimulus: pair.target,
+            block_trial: blockTrialNumber,
+            randomized_trial_order: overallTrialOrder,
+            iti_duration_ms: chooseRandomValue(ITI_OPTIONS_MS)
+          });
+
+          blockTrialNumber++;
+          overallTrialOrder++;
+
+          var targetTrial = Object.assign({}, pair, sharedOrderData, {
+            pair_role: "target",
+            pair_trial_position: 2,
+            item_id: pair.target_item_id,
+            stimulus: pair.target,
+            lexicality: pair.target_lexicality,
+            correct_response: pair.target_correct_response,
+            paired_item_id: pair.prime_item_id,
+            paired_stimulus: pair.prime,
+            block_trial: blockTrialNumber,
+            randomized_trial_order: overallTrialOrder,
+            iti_duration_ms: chooseRandomValue(ITI_OPTIONS_MS)
+          });
+
+          blockTrialNumber++;
+          overallTrialOrder++;
+
+          blocks[blockIndex].push(primeTrial, targetTrial);
+
+          pairIndex++;
+          overallPairOrder++;
         }
       }
 
       return blocks;
     }
-
 
     // ================================================================
     // 3. CONSENT SCREEN
@@ -770,55 +807,38 @@
           <h1>Instructions</h1>
 
           <p>
-            In this experiment, you will see various letter strings.
+            In this experiment, letter strings will appear one after another.
+            You must make a lexical decision for <strong>every</strong> string.
           </p>
 
           <p>
-            When you see a letter string, indicate as quickly and
-            accurately as possible whether it is:
+            Respond as quickly and accurately as possible:
           </p>
 
           <ul>
             <li>
-              A real Portuguese word:
-              press the <strong>J</strong> key using your
+              Real Portuguese word: press <strong>J</strong> with your
               <strong>right index finger</strong>.
             </li>
 
             <li>
-              Not a real Portuguese word:
-              press the <strong>F</strong> key using your
+              Not a real Portuguese word: press <strong>F</strong> with your
               <strong>left index finger</strong>.
             </li>
           </ul>
 
           <p>
-            Please keep your index fingers on the keys at all times
-            and do not swap your hands: use the left hand for the
-            F key and the right hand for the J key.
+            Each trial begins with a fixation cross. The letter string is
+            displayed briefly, and you may respond as soon as it appears.
           </p>
 
           <p>
-            The practice section will take approximately a couple of
-            minutes, and the main experiment will take approximately
-            15 minutes. The main experiment is divided into four
-            blocks, with three breaks.
+            Keep your index fingers on F and J throughout the task. The main
+            experiment is divided into four blocks, with three breaks.
           </p>
 
           <p>
-            Please complete the study in one session. Do not begin the
-            experiment if you do not have sufficient time to complete
-            it.
-          </p>
-
-          <p>
-            When you are done with the experiment, you will be asked to
-            fill out a survey about your language background.
-          </p>
-
-          <p>
-            Please remember that it is important that you respond as
-            quickly and accurately as possible.
+            After the task, you will complete a language-background survey.
           </p>
 
           <p class="continue-prompt">
@@ -840,57 +860,75 @@
     // ================================================================
 
     /*
-     * Replace these six examples with your actual practice items.
-     *
-     * Each item needs:
-     * - item_id: a unique identifier
-     * - prime: the briefly displayed prime
-     * - target: the string that remains until response
-     * - lexicality: "word" or "nonword"
-     * - correct_response: "j" for words and "f" for nonwords
+     * Practice is organized as three consecutive pairs, but every member of
+     * every pair receives its own F/J response.
      */
     var practice_stimuli = [
       {
+        pair_id: "practice_pair_01",
+        pair_role: "prime",
+        pair_trial_position: 1,
         item_id: "practice_01",
-        prime: "casa",
-        target: "CASA",
+        stimulus: "CASA",
         lexicality: "word",
-        correct_response: "j"
+        correct_response: "j",
+        paired_item_id: "practice_02",
+        condition: "practice"
       },
       {
+        pair_id: "practice_pair_01",
+        pair_role: "target",
+        pair_trial_position: 2,
         item_id: "practice_02",
-        prime: "livro",
-        target: "LIVRO",
+        stimulus: "LIVRO",
         lexicality: "word",
-        correct_response: "j"
+        correct_response: "j",
+        paired_item_id: "practice_01",
+        condition: "practice"
       },
       {
+        pair_id: "practice_pair_02",
+        pair_role: "prime",
+        pair_trial_position: 1,
         item_id: "practice_03",
-        prime: "verde",
-        target: "VERDE",
-        lexicality: "word",
-        correct_response: "j"
+        stimulus: "PUFRA",
+        lexicality: "nonword",
+        correct_response: "f",
+        paired_item_id: "practice_04",
+        condition: "practice"
       },
       {
+        pair_id: "practice_pair_02",
+        pair_role: "target",
+        pair_trial_position: 2,
         item_id: "practice_04",
-        prime: "pufra",
-        target: "PUFRA",
-        lexicality: "nonword",
-        correct_response: "f"
+        stimulus: "VERDE",
+        lexicality: "word",
+        correct_response: "j",
+        paired_item_id: "practice_03",
+        condition: "practice"
       },
       {
+        pair_id: "practice_pair_03",
+        pair_role: "prime",
+        pair_trial_position: 1,
         item_id: "practice_05",
-        prime: "dalte",
-        target: "DALTE",
+        stimulus: "DALTE",
         lexicality: "nonword",
-        correct_response: "f"
+        correct_response: "f",
+        paired_item_id: "practice_06",
+        condition: "practice"
       },
       {
+        pair_id: "practice_pair_03",
+        pair_role: "target",
+        pair_trial_position: 2,
         item_id: "practice_06",
-        prime: "nimpo",
-        target: "NIMPO",
+        stimulus: "NIMPO",
         lexicality: "nonword",
-        correct_response: "f"
+        correct_response: "f",
+        paired_item_id: "practice_05",
+        condition: "practice"
       }
     ];
 
@@ -911,12 +949,13 @@
           </p>
 
           <p>
-            After each response, you will receive feedback.
+            Respond to every letter string. After each response, you will
+            receive feedback.
           </p>
 
           <p>
-            Please remember to keep your right index finger in the J key and press it when you see a real word,
-            and to place your left index finger in the F key, and press it when you see a nonword.
+            Press <strong>J</strong> for a real word and <strong>F</strong>
+            for a nonword.
           </p>
 
           <p class="continue-prompt">
@@ -932,74 +971,65 @@
 
     timeline.push(practice_intro);
 
-
-    /*
-     * One psychophysics trial presents the complete sequence on one canvas:
-     *
-     *   mask:   0 ms to MASK_DURATION_MS
-     *   prime:  MASK_DURATION_MS to target onset
-     *   target: target onset until response
-     *
-     * response_start_time makes the plugin ignore F/J before target onset and
-     * measures RT from target onset, rather than from the beginning of the mask.
-     */
-    var practice_masked_trial = {
+    var practice_continuous_trial = {
       type: jsPsychPsychophysics,
 
       stimuli: [
         makePsychophysicsText(
-          "######",
+          "+",
           0,
-          MASK_DURATION_MS
+          FIXATION_DURATION_MS,
+          "40px"
         ),
 
         makePsychophysicsText(
           function() {
-            return jsPsych.evaluateTimelineVariable("prime");
+            return jsPsych.evaluateTimelineVariable("stimulus");
           },
-          MASK_DURATION_MS,
-          MASK_DURATION_MS + PRIME_DURATION_MS
-        ),
-
-        makePsychophysicsText(
-          function() {
-            return jsPsych.evaluateTimelineVariable("target");
-          },
-          MASK_DURATION_MS + PRIME_DURATION_MS
+          STIMULUS_ONSET_MS,
+          STIMULUS_ONSET_MS + STIMULUS_DURATION_MS
         )
       ],
 
       background_color: "rgb(127, 127, 127)",
       choices: ["f", "j"],
-      response_start_time:
-        MASK_DURATION_MS + PRIME_DURATION_MS,
+      response_start_time: STIMULUS_ONSET_MS,
       response_ends_trial: true,
+      trial_duration: STIMULUS_ONSET_MS + RESPONSE_DEADLINE_MS,
+      post_trial_gap: function() {
+        return chooseRandomValue(ITI_OPTIONS_MS);
+      },
 
       data: {
-        task: "practice_target",
+        task: "practice_lexical_decision",
         phase: "practice",
-        timing_method: "psychophysics_requestAnimationFrame",
-        requested_mask_duration_ms: MASK_DURATION_MS,
-        requested_prime_duration_ms: PRIME_DURATION_MS,
-        target_onset_ms:
-          MASK_DURATION_MS + PRIME_DURATION_MS,
+        paradigm: "continuous_lexical_decision",
+        pair_id: jsPsych.timelineVariable("pair_id"),
+        pair_role: jsPsych.timelineVariable("pair_role"),
+        pair_trial_position: jsPsych.timelineVariable("pair_trial_position"),
         item_id: jsPsych.timelineVariable("item_id"),
-        prime: jsPsych.timelineVariable("prime"),
-        target: jsPsych.timelineVariable("target"),
+        stimulus_item: jsPsych.timelineVariable("stimulus"),
         lexicality: jsPsych.timelineVariable("lexicality"),
-        correct_response:
-          jsPsych.timelineVariable("correct_response")
+        correct_response: jsPsych.timelineVariable("correct_response"),
+        paired_item_id: jsPsych.timelineVariable("paired_item_id"),
+        condition: jsPsych.timelineVariable("condition"),
+        fixation_duration_ms: FIXATION_DURATION_MS,
+        pre_stimulus_blank_ms: PRE_STIMULUS_BLANK_MS,
+        stimulus_duration_ms: STIMULUS_DURATION_MS,
+        response_deadline_ms: RESPONSE_DEADLINE_MS,
+        stimulus_onset_ms: STIMULUS_ONSET_MS
       },
 
       on_finish: function(data) {
         data.correct =
+          data.response !== null &&
           jsPsych.pluginAPI.compareKeys(
             data.response,
             data.correct_response
           );
+        data.missed_response = data.response === null;
       }
     };
-
 
     var practice_feedback = {
       type: jsPsychHtmlKeyboardResponse,
@@ -1008,23 +1038,27 @@
         var lastTarget =
           jsPsych.data
             .get()
-            .filter({ task: "practice_target" })
+            .filter({ task: "practice_lexical_decision" })
             .last(1)
             .values()[0];
 
         if (lastTarget.correct) {
-          return (
-            '<p class="feedback-correct">Correct!</p>'
-          );
+          return '<p class="feedback-correct">Correct!</p>';
         }
 
-        var correctKey =
-          lastTarget.correct_response.toUpperCase();
+        if (lastTarget.missed_response) {
+          return (
+            '<p class="feedback-incorrect">Too slow.</p>' +
+            '<p>The correct response was <strong>' +
+            lastTarget.correct_response.toUpperCase() +
+            '</strong>.</p>'
+          );
+        }
 
         return (
           '<p class="feedback-incorrect">Incorrect.</p>' +
           '<p>The correct response was <strong>' +
-          correctKey +
+          lastTarget.correct_response.toUpperCase() +
           '</strong>.</p>'
         );
       },
@@ -1038,23 +1072,16 @@
       }
     };
 
-
     var practice_procedure = {
       timeline: [
-        practice_masked_trial,
+        practice_continuous_trial,
         practice_feedback
       ],
 
       timeline_variables: practice_stimuli,
-      randomize_order: true
+      randomize_order: false
     };
 
-
-    /*
-     * This screen is part of the loop, so participants see it after every
-     * practice attempt. It calculates accuracy from the most recent six
-     * practice target trials only.
-     */
     var practice_result_screen = {
       type: jsPsychHtmlKeyboardResponse,
 
@@ -1062,14 +1089,11 @@
         var latestAttempt =
           jsPsych.data
             .get()
-            .filter({ task: "practice_target" })
+            .filter({ task: "practice_lexical_decision" })
             .last(practice_stimuli.length);
 
-        var accuracy =
-          calculateAccuracy(latestAttempt);
-
-        var accuracyPercent =
-          Math.round(accuracy * 100);
+        var accuracy = calculateAccuracy(latestAttempt);
+        var accuracyPercent = Math.round(accuracy * 100);
 
         if (accuracy > PRACTICE_PASS_THRESHOLD) {
           return `
@@ -1077,12 +1101,8 @@
               <h1>Practice complete</h1>
 
               <p>
-                Congrats, your practice accuracy was
-                <strong>${accuracyPercent}%</strong>!
-              </p>
-
-              <p>
-                You may now proceed to the real experiment.
+                Your practice accuracy was
+                <strong>${accuracyPercent}%</strong>.
               </p>
 
               <p class="continue-prompt">
@@ -1102,7 +1122,7 @@
             </p>
 
             <p>
-              You need more than 80% accuracy to proceed, so the six practice
+              You need more than 80% accuracy to proceed, so the practice
               trials will restart.
             </p>
 
@@ -1121,11 +1141,10 @@
         var latestAttempt =
           jsPsych.data
             .get()
-            .filter({ task: "practice_target" })
+            .filter({ task: "practice_lexical_decision" })
             .last(practice_stimuli.length);
 
-        var accuracy =
-          calculateAccuracy(latestAttempt);
+        var accuracy = calculateAccuracy(latestAttempt);
 
         data.practice_accuracy = accuracy;
         data.practice_passed =
@@ -1133,12 +1152,6 @@
       }
     };
 
-
-    /*
-     * loop_function receives the data from the most recent practice
-     * iteration. Returning true repeats the practice. Returning false allows
-     * the experiment to continue.
-     */
     var practice_loop = {
       timeline: [
         practice_procedure,
@@ -1146,18 +1159,16 @@
       ],
 
       loop_function: function(data) {
-        var practiceTargets =
-          data.filter({ task: "practice_target" });
+        var practiceTrials =
+          data.filter({ task: "practice_lexical_decision" });
 
-        var accuracy =
-          calculateAccuracy(practiceTargets);
+        var accuracy = calculateAccuracy(practiceTrials);
 
         return accuracy <= PRACTICE_PASS_THRESHOLD;
       }
     };
 
     timeline.push(practice_loop);
-
 
     // ================================================================
     // 7. REAL-EXPERIMENT START SCREEN
@@ -1170,27 +1181,19 @@
         <div class="text-screen">
           <h1>You are now ready for the main experiment!</h1>
 
-          <p>To participate effectively, please:</p>
+          <p>Before beginning, please:</p>
 
           <ul>
-            <li>Maximize your window.</li>
+            <li>Maximize your browser window.</li>
             <li>Turn off your phone, notifications, and music.</li>
-            <li>Avoid distractions.</li>
-            <li>Avoid non-programmed breaks.</li>
+            <li>Avoid distractions and non-programmed breaks.</li>
           </ul>
 
           <p>
-            The practice feedback will no longer appear.
+            The practice feedback will no longer appear. Continue responding
+            to every letter string: <strong>J</strong> for a real Portuguese
+            word and <strong>F</strong> for a nonword.
           </p>
-
-          <p>
-            Remember: press <strong>J</strong> for a real
-            Portuguese word and <strong>F</strong> for a nonword.
-          </p>
-
-          <p>
-            Keep your fingers on the keys.
-          </p>          
 
           <p class="continue-prompt">
             Press the space bar to begin.
@@ -1213,116 +1216,157 @@
 
 
     // ================================================================
-    // 8. LOAD REAL-EXPERIMENT STIMULI FROM CSV
+    // 8. LOAD PRIME-TARGET PAIRS FROM CSV
     // ================================================================
 
     /*
-     * main_stimuli.csv is editable in Excel and is loaded in both modes:
-     * - locally from http://localhost:8000/main_stimuli.csv
-     * - online from the same GitHub Pages folder as this HTML file
-     *
-     * Any extra spreadsheet columns are preserved and written to the data
-     * file as additional columns on each main_target row.
+     * One CSV row represents one pair. The code preserves every spreadsheet
+     * column, shuffles complete pairs, and expands each pair into two adjacent
+     * lexical-decision trials: prime first, target second.
      */
-    var loadedMainStimuli =
-      await loadMainStimuli(MAIN_STIMULI_FILE);
+    var loadedMainPairs =
+      await loadMainPairs(MAIN_STIMULI_FILE);
 
-    var main_stimuli = loadedMainStimuli.stimuli;
-    var main_stimulus_columns = loadedMainStimuli.headers;
+    var main_pairs = loadedMainPairs.pairs;
+    var main_pair_columns = loadedMainPairs.headers;
     var main_blocks =
-      divideIntoFourBlocks(
-        main_stimuli
-      );
+      dividePairsIntoFourBlocks(main_pairs);
 
 
     // ================================================================
-    // 9. REAL-EXPERIMENT TRIAL SEQUENCE
+    // 9. CONTINUOUS LEXICAL-DECISION TRIAL SEQUENCE
     // ================================================================
 
     /*
-     * The real trials use the same single-canvas sequence as practice.
-     * The plugin records avg_frame_time automatically; this is useful for
-     * identifying trials or devices with unstable visual refresh timing.
+     * Preserve all original spreadsheet columns on both the prime row and the
+     * target row in the final data file.
      */
-    /*
-     * Turn every spreadsheet column into a jsPsych timeline-variable field,
-     * so custom columns that you add in Excel are also retained in the CSV.
-     */
-    var mainStimulusDataFields = {};
-    main_stimulus_columns.forEach(function(columnName) {
-      mainStimulusDataFields[columnName] =
+    var mainPairDataFields = {};
+    main_pair_columns.forEach(function(columnName) {
+      mainPairDataFields[columnName] =
         jsPsych.timelineVariable(columnName);
     });
 
     [
+      "pair_role",
+      "pair_trial_position",
+      "item_id",
+      "lexicality",
+      "correct_response",
+      "paired_item_id",
+      "paired_stimulus",
       "experimental_block",
+      "block_pair_position",
+      "randomized_pair_order",
       "block_trial",
-      "randomized_trial_order"
+      "randomized_trial_order",
+      "iti_duration_ms"
     ].forEach(function(columnName) {
-      mainStimulusDataFields[columnName] =
+      mainPairDataFields[columnName] =
         jsPsych.timelineVariable(columnName);
     });
 
-    var main_masked_trial = {
+    /*
+     * Use stimulus_item rather than stimulus in the saved data. The plugin
+     * itself uses a field named stimulus, which is removed before CSV export.
+     */
+    mainPairDataFields.stimulus_item =
+      jsPsych.timelineVariable("stimulus");
+
+    var main_continuous_trial = {
       type: jsPsychPsychophysics,
 
       stimuli: [
         makePsychophysicsText(
-          "######",
+          "+",
           0,
-          MASK_DURATION_MS
+          FIXATION_DURATION_MS,
+          "40px"
         ),
 
         makePsychophysicsText(
           function() {
-            return jsPsych.evaluateTimelineVariable("prime");
+            return jsPsych.evaluateTimelineVariable("stimulus");
           },
-          MASK_DURATION_MS,
-          MASK_DURATION_MS + PRIME_DURATION_MS
-        ),
-
-        makePsychophysicsText(
-          function() {
-            return jsPsych.evaluateTimelineVariable("target");
-          },
-          MASK_DURATION_MS + PRIME_DURATION_MS
+          STIMULUS_ONSET_MS,
+          STIMULUS_ONSET_MS + STIMULUS_DURATION_MS
         )
       ],
 
       background_color: "rgb(127, 127, 127)",
       choices: ["f", "j"],
-      response_start_time:
-        MASK_DURATION_MS + PRIME_DURATION_MS,
+      response_start_time: STIMULUS_ONSET_MS,
       response_ends_trial: true,
+      trial_duration: STIMULUS_ONSET_MS + RESPONSE_DEADLINE_MS,
+      post_trial_gap: function() {
+        return jsPsych.evaluateTimelineVariable("iti_duration_ms");
+      },
 
       data: Object.assign(
         {},
-        mainStimulusDataFields,
+        mainPairDataFields,
         {
-          task: "main_target",
+          task: "main_lexical_decision",
           phase: "main",
+          paradigm: "continuous_lexical_decision",
           timing_method: "psychophysics_requestAnimationFrame",
-          requested_mask_duration_ms: MASK_DURATION_MS,
-          requested_prime_duration_ms: PRIME_DURATION_MS,
-          target_onset_ms:
-            MASK_DURATION_MS + PRIME_DURATION_MS
+          fixation_duration_ms: FIXATION_DURATION_MS,
+          pre_stimulus_blank_ms: PRE_STIMULUS_BLANK_MS,
+          stimulus_duration_ms: STIMULUS_DURATION_MS,
+          response_deadline_ms: RESPONSE_DEADLINE_MS,
+          stimulus_onset_ms: STIMULUS_ONSET_MS,
+          prime_target_lag_trials: 1
         }
       ),
 
       on_finish: function(data) {
         data.correct =
+          data.response !== null &&
           jsPsych.pluginAPI.compareKeys(
             data.response,
             data.correct_response
           );
+        data.missed_response = data.response === null;
+
+        if (data.pair_role === "target") {
+          var precedingPrime =
+            jsPsych.data
+              .get()
+              .filter({
+                task: "main_lexical_decision",
+                pair_id: data.pair_id,
+                pair_role: "prime"
+              })
+              .last(1)
+              .values()[0];
+
+          if (precedingPrime) {
+            data.preceding_prime_item_id = precedingPrime.item_id;
+            data.preceding_prime_stimulus = precedingPrime.stimulus_item;
+            data.preceding_prime_response = precedingPrime.response;
+            data.preceding_prime_correct = precedingPrime.correct;
+            data.preceding_prime_rt = precedingPrime.rt;
+            data.prime_target_pair_verified =
+              precedingPrime.pair_id === data.pair_id;
+          } else {
+            data.preceding_prime_item_id = "";
+            data.preceding_prime_stimulus = "";
+            data.preceding_prime_response = "";
+            data.preceding_prime_correct = "";
+            data.preceding_prime_rt = "";
+            data.prime_target_pair_verified = false;
+          }
+        } else {
+          data.preceding_prime_item_id = "";
+          data.preceding_prime_stimulus = "";
+          data.preceding_prime_response = "";
+          data.preceding_prime_correct = "";
+          data.preceding_prime_rt = "";
+          data.prime_target_pair_verified = "";
+        }
       }
     };
 
-
-    /*
-     * This function creates each pause screen. Passing the block number into
-     * the function avoids writing nearly identical pause code three times.
-     */
     function makePauseScreen(completedBlock) {
       return {
         type: jsPsychHtmlKeyboardResponse,
@@ -1351,44 +1395,29 @@
         },
 
         on_load: function() {
-          jsPsych.progressBar.progress =
-            completedBlock / 4;
+          jsPsych.progressBar.progress = completedBlock / 4;
         }
       };
     }
 
-
-    /*
-     * The spreadsheet is shuffled once and divided automatically into
-     * four nearly equal blocks. The resulting order is retained.
-     */
-    for (
-      var blockNumber = 1;
-      blockNumber <= 4;
-      blockNumber++
-    ) {
-      var stimuliForThisBlock =
-        main_blocks[
-          blockNumber - 1
-        ];
+    for (var blockNumber = 1; blockNumber <= 4; blockNumber++) {
+      var trialsForThisBlock = main_blocks[blockNumber - 1];
 
       var experimentalBlock = {
-        timeline: [
-          main_masked_trial
-        ],
+        timeline: [main_continuous_trial],
+        timeline_variables: trialsForThisBlock,
 
-        timeline_variables:
-          stimuliForThisBlock,
-
+        /*
+         * The pairs have already been shuffled. Do not randomize here, because
+         * that would separate each target from its immediately preceding prime.
+         */
         randomize_order: false
       };
 
       timeline.push(experimentalBlock);
 
       if (blockNumber < 4) {
-        timeline.push(
-          makePauseScreen(blockNumber)
-        );
+        timeline.push(makePauseScreen(blockNumber));
       }
     }
 
@@ -1401,25 +1430,25 @@
       type: jsPsychHtmlKeyboardResponse,
 
       stimulus: function() {
-        var trials =
+        var allTrials =
           jsPsych.data
             .get()
-            .filter({ task: "main_target" });
+            .filter({ task: "main_lexical_decision" });
 
-        var correctTrials =
-          trials.filter({ correct: true });
+        var targetTrials = allTrials.filter({ pair_role: "target" });
+        var correctTargetTrials = targetTrials.filter({ correct: true });
 
-        var accuracy =
-          calculateAccuracy(trials);
+        var overallAccuracy = calculateAccuracy(allTrials);
+        var targetAccuracy = calculateAccuracy(targetTrials);
 
-        var accuracyPercent =
-          Math.round(accuracy * 100);
+        var overallAccuracyPercent =
+          Math.round(overallAccuracy * 100);
+        var targetAccuracyPercent =
+          Math.round(targetAccuracy * 100);
 
-        var meanRt =
-          correctTrials.count() > 0
-            ? Math.round(
-                correctTrials.select("rt").mean()
-              )
+        var meanTargetRt =
+          correctTargetTrials.count() > 0
+            ? Math.round(correctTargetTrials.select("rt").mean())
             : "N/A";
 
         return `
@@ -1427,17 +1456,22 @@
             <h1>The main task is complete!</h1>
 
             <p>
-              Your accuracy in the experiment was
-              <strong>${accuracyPercent}%</strong>.
+              Your overall accuracy was
+              <strong>${overallAccuracyPercent}%</strong>.
             </p>
 
             <p>
-              Your average response time on correct trials was
-              <strong>${meanRt} ms</strong>.
+              Your accuracy on target trials was
+              <strong>${targetAccuracyPercent}%</strong>.
+            </p>
+
+            <p>
+              Your average response time on correct target trials was
+              <strong>${meanTargetRt} ms</strong>.
             </p>
 
             <p class="continue-prompt">
-              Press any key to continue to a final language-background questionnaire.
+              Press any key to continue to the final questionnaire.
             </p>
           </div>
         `;
@@ -1453,7 +1487,6 @@
     };
 
     timeline.push(final_screen);
-
 
     // ================================================================
     // LANGUAGE-BACKGROUND AND DOMINANCE QUESTIONNAIRE
