@@ -1568,7 +1568,7 @@
       // 5. TASK INSTRUCTIONS
       // ==============================================================
 
-      var instructionsScreen = {
+      var instructionsScreen1 = {
         type: jsPsychHtmlKeyboardResponse,
 
         stimulus: `
@@ -1577,37 +1577,50 @@
 
             <p>
               Neste experimento, você verá palavras acompanhadas de
-              paráfrases de seus significados.
+              frases descrevendo seu significado.
             </p>
 
             <p>
-              Sua tarefa é avaliar quão bem cada paráfrase descreve
+              Sua tarefa é avaliar quão bem cada frase descreve
               o significado da palavra correspondente, usando uma escala
               de <strong>1</strong> a <strong>7</strong>.
             </p>
 
+            <p>&nbsp;</p>
+
             <p>
-              Selecione <strong>1</strong> se a paráfrase descrever muito
-              mal o significado da palavra — isto é, se você não
+              <strong>Selecione 1 se a frase descrever muito
+              MAL o significado da palavra</strong> — isto é, se você não
               aceitar de forma alguma esse significado para a palavra.
             </p>
 
             <p>
-              Selecione <strong>7</strong> se a paráfrase descrever
-              perfeitamente o significado da palavra — isto é, se esse
+              <strong>Selecione 7 se a frase descrever
+              PERFEITAMENTE o significado da palavra</strong> — isto é, se esse
               for o significado que você normalmente associaria àquela
               palavra.
             </p>
+            
+            <p>&nbsp;</p>
 
             <p>
-              Use os números intermediários para indicar graus
-              intermediários de adequação entre esses dois extremos:
-              números mais baixos indicam uma adequação pior e números
-              mais altos indicam uma adequação melhor.
+              <strong>Caso você nunca tenha ouvido a palavra antes,
+              pense no significado que você atribuiria a ela 
+              caso a usasse, ou na interpretação que você provavelmente
+              faria caso oussive alguém a usando. </strong>              
             </p>
 
             <p>
-              Você verá botões de 1 a 7 na tela. Você pode
+              Faça uso dos números intermediários para indicar graus
+              intermediários de adequação entre os dois extremos:
+              quanto mais próximo ao número 1, pior a adequação;
+              quanto mais próximo ao número 7, melhor a adequação. 
+            </p>
+
+             <p>&nbsp;</p>
+
+            <p>
+              <strong>Você verá botões de 1 a 7 na tela</strong>. Você pode
               clicar neles com o mouse ou usar as teclas 1–7 do
               teclado. Qualquer que seja o método escolhido, por favor,
               use o mesmo ao longo de todo o experimento. Você poderá
@@ -1615,31 +1628,41 @@
             </p>
 
             <p>
-              Não há respostas certas ou erradas, mas responda da forma
-              mais espontânea e rápida possível. Não passe muito
-              tempo refletindo sobre a paráfrase.
+              Não há respostas certas ou erradas, então pedimos que você
+              responda da forma mais espontânea possível.
+            </p>
+            <p class="continue-prompt">
+              Pressione qualquer tecla para continuar.
+            </p>
+          </div>
+        `,
+
+        data: {
+          task: "instructions_1"
+        }
+      };
+
+      var instructionsScreen2 = {
+        type: jsPsychHtmlKeyboardResponse,
+
+        stimulus: `
+          <div class="text-screen">
+
+            <p>
+              Por favor, complete o estudo em uma única sessão. Não o inicie
+              caso saiba que não terá tempo suficiente para concluí-lo.
             </p>
 
             <p>
-              A seção de prática levará aproximadamente dois minutos,
+              A seção de prática levará aproximadamente dois minutos
               e o experimento principal levará aproximadamente
               15 minutos. O experimento principal é dividido em quatro
-              blocos, com três pausas.
+              blocos. Entre eles, você poderá fazer três pausas para descansar.
             </p>
 
             <p>
-              Por favor, complete o estudo em uma única sessão. Não inicie
-              o experimento se não tiver tempo suficiente para concluí-lo.
-            </p>
-
-            <p>
-              Ao final do experimento, você preencherá um breve
+              Ao final do experimento, pediremos que você preencha um breve
               questionário sobre seu histórico linguístico.
-            </p>
-
-            <p>
-              Lembre-se de que é importante responder da forma mais
-              rápida e adequada possível.
             </p>
 
             <p class="continue-prompt">
@@ -1649,11 +1672,12 @@
         `,
 
         data: {
-          task: "instructions"
+          task: "instructions_2"
         }
       };
 
-      timeline.push(instructionsScreen);
+      timeline.push(instructionsScreen1);
+      timeline.push(instructionsScreen2);
 
 
       // ==============================================================
@@ -1948,8 +1972,8 @@
 
             <p>
               O feedback da prática não aparecerá mais. Continue
-              avaliando cada par de palavra e paráfrase de
-              <strong>1</strong> a <strong>7</strong>.
+              avaliando cada par formado por uma palavra e uma frase
+              usando a escala de <strong>1</strong> a <strong>7</strong>.
             </p>
 
             <p class="continue-prompt">

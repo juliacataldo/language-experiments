@@ -1,10 +1,10 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="pt-BR">
   <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-    <title>Language Experiment</title>
+    <title>Experimento de linguagem</title>
 
     <!-- jsPsych core files from your existing local jspsych folder -->
     <script src="jspsych/jspsych.js"></script>
@@ -319,10 +319,10 @@
        * meaning.
        */
       var RATING_QUESTION =
-        "How well does the paraphrase describe the meaning of the word?";
+        "Quão bem a paráfrase descreve o significado da palavra?";
 
-      var LOW_ENDPOINT_LABEL = "1 — Very poor fit";
-      var HIGH_ENDPOINT_LABEL = "7 — Perfect fit";
+      var LOW_ENDPOINT_LABEL = "1 — Muito ruim";
+      var HIGH_ENDPOINT_LABEL = "7 — Muito bom";
 
       /*
        * Upload the approved consent PDF to the same folder as this file
@@ -332,13 +332,13 @@
       var CONSENT_PDF_FILE = "consent.pdf";
 
       /*
-       * Keep main_stimuli.csv in the same folder as this HTML file.
+       * Keep main_stimuli_counterbalanced.csv in the same folder as this HTML file.
        *
        * Replace the DataPipe placeholder before putting the experiment
        * online. Do not put your private OSF token in this file.
        */
       var PRACTICE_STIMULI_FILE = "practice_stimuli.csv";
-      var MAIN_STIMULI_FILE = "main_stimuli.csv";
+      var MAIN_STIMULI_FILE = "main_stimuli_counterbalanced.csv";
       var DATAPIPE_EXPERIMENT_ID =
         "O7bfIHuan3Jc";
 
@@ -363,7 +363,7 @@
 
       if (window.location.protocol === "file:") {
         throw new Error(
-          "This experiment loads practice_stimuli.csv and main_stimuli.csv. Run it through " +
+          "This experiment loads practice_stimuli.csv and main_stimuli_counterbalanced.csv. Run it through " +
           "http://localhost:8000/ instead of double-clicking exp1.html."
         );
       }
@@ -382,14 +382,18 @@
       var jsPsych = initJsPsych({
         show_progress_bar: true,
         auto_update_progress_bar: false,
-        message_progress_bar: "Experiment progress"
+        message_progress_bar: "Progresso do experimento"
       });
 
       var timeline = [];
 
       /*
-       * Generate a new random eight-digit participant number for every run.
-       * URL parameters, including Prolific IDs, are deliberately ignored.
+       * Generate a random eight-digit INTERNAL participant number.
+       *
+       * The number is stored only in sessionStorage so that refreshing the
+       * page in the same browser tab keeps the same internal participant ID.
+       * It is NOT a Prolific ID and cannot be linked back to a Prolific
+       * account from the experiment data.
        */
       function generateRandomEightDigitId() {
         if (
@@ -420,8 +424,220 @@
         );
       }
 
+      function getOrCreateInternalParticipantId() {
+        var storageKey =
+          "semantic_norming_internal_participant_id";
+
+        try {
+          var existingId =
+            window.sessionStorage.getItem(
+              storageKey
+            );
+
+          if (
+            existingId &&
+            /^[0-9]{8}$/.test(existingId)
+          ) {
+            return existingId;
+          }
+
+          var newId =
+            generateRandomEightDigitId();
+
+          window.sessionStorage.setItem(
+            storageKey,
+            newId
+          );
+
+          return newId;
+        } catch (error) {
+          return generateRandomEightDigitId();
+        }
+      }
+
       var participantId =
-        generateRandomEightDigitId();
+        getOrCreateInternalParticipantId();
+
+      /*
+       * Recruitment source
+       * ------------------
+       * Use the Prolific study URL with:
+       *   ?source=prolific
+       *
+       * Use the personal-recruitment link with:
+       *   ?source=personal
+       *
+       * The experiment NEVER reads or saves PROLIFIC_PID, STUDY_ID, or
+       * SESSION_ID. The source flag is our own non-identifying label.
+       *
+       * Per the requested rule, anything other than source=prolific is
+       * recorded as personal_recruitment.
+       */
+      var urlParameters =
+        new URLSearchParams(
+          window.location.search
+        );
+
+      var recruitmentSource =
+        urlParameters.get("source") ===
+          "prolific"
+          ? "prolific"
+          : "personal_recruitment";
+
+      /*
+       * Counterbalancing
+       * ----------------
+       * Online:
+       *   DataPipe supplies the next sequential condition number.
+       *   With condition assignment configured for four conditions,
+       *   DataPipe cycles 0,1,2,3,0,1,2,3...
+       *   We convert those to Versions 1,2,3,4.
+       *
+       * Local testing:
+       *   ?version=1, ?version=2, ?version=3, or ?version=4 selects an
+       *   explicit version. If no version is supplied locally, one is
+       *   assigned from the internal random participant ID.
+       *
+       * The online assignment is cached in sessionStorage so a normal page
+       * refresh in the same tab keeps the same version and does not request
+       * another condition from DataPipe.
+       */
+      async function resolveCounterbalanceVersion() {
+        var requestedVersion =
+          urlParameters.get("version");
+
+        if (requestedVersion !== null) {
+          var parsedVersion =
+            Number(requestedVersion);
+
+          if (
+            !Number.isInteger(parsedVersion) ||
+            parsedVersion < 1 ||
+            parsedVersion > 4
+          ) {
+            throw new Error(
+              'The URL parameter "version" must be 1, 2, 3, or 4.'
+            );
+          }
+
+          return {
+            version: parsedVersion,
+            assignment_method:
+              "url_parameter"
+          };
+        }
+
+        if (IS_LOCAL_RUN) {
+          return {
+            version:
+              (Number(participantId) % 4) + 1,
+            assignment_method:
+              "local_internal_participant_id_modulo"
+          };
+        }
+
+        var storageKey =
+          "semantic_norming_counterbalance_version";
+
+        try {
+          var cachedVersion =
+            Number(
+              window.sessionStorage.getItem(
+                storageKey
+              )
+            );
+
+          if (
+            Number.isInteger(cachedVersion) &&
+            cachedVersion >= 1 &&
+            cachedVersion <= 4
+          ) {
+            return {
+              version: cachedVersion,
+              assignment_method:
+                "datapipe_sequential_cached"
+            };
+          }
+        } catch (error) {
+          // Continue to DataPipe assignment if sessionStorage is unavailable.
+        }
+
+        var response =
+          await fetch(
+            "https://pipe.jspsych.org/api/condition/",
+            {
+              method: "POST",
+              headers: {
+                "Content-Type":
+                  "application/json"
+              },
+              body: JSON.stringify({
+                experimentID:
+                  DATAPIPE_EXPERIMENT_ID
+              })
+            }
+          );
+
+        var payload = {};
+
+        try {
+          payload =
+            await response.json();
+        } catch (error) {
+          throw new Error(
+            "DataPipe returned an unreadable condition-assignment response."
+          );
+        }
+
+        if (!response.ok) {
+          throw new Error(
+            "Could not obtain a counterbalance assignment from DataPipe. " +
+            (payload.message || "Unknown DataPipe error.") +
+            " Confirm that condition assignment is enabled and configured " +
+            "for four conditions on the DataPipe experiment dashboard."
+          );
+        }
+
+        var conditionNumber =
+          Number(payload.condition);
+
+        if (
+          !Number.isInteger(conditionNumber) ||
+          conditionNumber < 0 ||
+          conditionNumber > 3
+        ) {
+          throw new Error(
+            "DataPipe returned condition " +
+            String(payload.condition) +
+            ". This experiment requires DataPipe condition assignment " +
+            "to be configured for exactly four conditions (0-3)."
+          );
+        }
+
+        var assignedVersion =
+          conditionNumber + 1;
+
+        try {
+          window.sessionStorage.setItem(
+            storageKey,
+            String(assignedVersion)
+          );
+        } catch (error) {
+          // Assignment still works even if sessionStorage is unavailable.
+        }
+
+        return {
+          version: assignedVersion,
+          assignment_method:
+            "datapipe_sequential"
+        };
+      }
+
+      var counterbalanceAssignment =
+        await resolveCounterbalanceVersion();
+
+      var counterbalanceVersion =
+        counterbalanceAssignment.version;
 
       var sessionTimestamp =
         new Date()
@@ -431,14 +647,31 @@
 
       var dataFileStem =
         "semantic_norming_" +
+        recruitmentSource +
+        "_" +
         participantId +
         "_" +
         sessionTimestamp;
 
+      /*
+       * IMPORTANT: no Prolific IDs are stored.
+       *
+       * participant_id is the experiment's own random eight-digit number.
+       * recruitment_source records only "prolific" or
+       * "personal_recruitment".
+       */
       jsPsych.data.addProperties({
         participant_id: participantId,
+        recruitment_source:
+          recruitmentSource,
         run_mode: RUN_MODE,
-        session_timestamp_utc: sessionTimestamp
+        session_timestamp_utc:
+          sessionTimestamp,
+        counterbalance_version:
+          counterbalanceVersion,
+        counterbalance_assignment_method:
+          counterbalanceAssignment
+            .assignment_method
       });
 
 
@@ -587,9 +820,14 @@
 
         var requiredColumns = [
           "item_id",
+          "lexical_item_id",
+          "counterbalance_group",
+          "version",
           "condition",
           "word",
-          "sentence"
+          "sentence",
+          "reading",
+          "analysis_status"
         ];
 
         requiredColumns.forEach(
@@ -622,13 +860,18 @@
 
               if (
                 !item.item_id ||
+                !item.lexical_item_id ||
+                !item.version ||
+                !item.condition ||
                 !item.word ||
-                !item.sentence
+                !item.sentence ||
+                !item.reading ||
+                !item.analysis_status
               ) {
                 throw new Error(
                   "CSV row " +
                   (rowIndex + 2) +
-                  " has a blank item_id, word, or sentence."
+                  " has a blank required main-stimulus field."
                 );
               }
 
@@ -801,67 +1044,256 @@
        * that differ in size by at most one trial. No block column is needed
        * in the spreadsheet.
        */
-      function divideIntoFourBlocks(stimuli) {
-        if (stimuli.length < 4) {
+      function validateCounterbalancedVersion(
+        stimuli,
+        versionNumber
+      ) {
+        var expectedConditions = [
+          "high_in",
+          "low_re",
+          "low_des",
+          "high_des"
+        ];
+
+        if (stimuli.length !== 120) {
           throw new Error(
-            "The main stimulus spreadsheet must contain at least four trials."
+            "Counterbalance version " +
+            versionNumber +
+            " must contain exactly 120 trials. Found " +
+            stimuli.length +
+            "."
           );
         }
 
-        var shuffledStimuli =
-          jsPsych.randomization.shuffle(
-            stimuli.slice()
+        var lexicalItemIds =
+          stimuli.map(function(item) {
+            return item.lexical_item_id;
+          });
+
+        if (
+          new Set(lexicalItemIds).size !==
+          lexicalItemIds.length
+        ) {
+          throw new Error(
+            "Counterbalance version " +
+            versionNumber +
+            " contains a repeated lexical item. " +
+            "A participant must never see both readings of the same word."
           );
+        }
+
+        expectedConditions.forEach(
+          function(conditionName) {
+            var conditionItems =
+              stimuli.filter(function(item) {
+                return (
+                  item.condition ===
+                  conditionName
+                );
+              });
+
+            if (conditionItems.length !== 30) {
+              throw new Error(
+                "Version " +
+                versionNumber +
+                " must contain 30 trials for condition " +
+                conditionName +
+                ". Found " +
+                conditionItems.length +
+                "."
+              );
+            }
+
+            [
+              "correct",
+              "incorrect"
+            ].forEach(
+              function(statusName) {
+                var statusCount =
+                  conditionItems.filter(
+                    function(item) {
+                      return (
+                        item.analysis_status ===
+                        statusName
+                      );
+                    }
+                  ).length;
+
+                if (statusCount !== 15) {
+                  throw new Error(
+                    "Version " +
+                    versionNumber +
+                    ", condition " +
+                    conditionName +
+                    ", analysis_status " +
+                    statusName +
+                    " must contain 15 trials. Found " +
+                    statusCount +
+                    "."
+                  );
+                }
+              }
+            );
+          }
+        );
+      }
+
+
+      /*
+       * Each participant sees 120 main trials, divided into four blocks of
+       * exactly 30. Every condition contributes 30 trials overall: 15 whose
+       * reading is predicted by the analysis and 15 whose reading is not.
+       *
+       * Within each 30-trial block, every condition contributes either 7 or
+       * 8 trials. Each condition × analysis_status cell contributes either 3
+       * or 4 trials, so all conditions/readings remain mixed throughout the
+       * experiment rather than clustering by condition.
+       *
+       * The specific items assigned to blocks are randomized independently
+       * for every participant.
+       */
+      function divideIntoFourBalancedBlocks(
+        stimuli
+      ) {
+        var conditions = [
+          "high_in",
+          "low_re",
+          "low_des",
+          "high_des"
+        ];
+
+        var statuses = [
+          "correct",
+          "incorrect"
+        ];
+
+        /*
+         * Every cell contains 15 items, distributed as 4+4+4+3.
+         * The block receiving only 3 rotates across cells so that each block
+         * ends with exactly 30 trials and each condition contributes 7 or 8.
+         */
+        var threeItemBlock = {
+          "high_in|correct": 1,
+          "high_in|incorrect": 3,
+          "low_re|correct": 2,
+          "low_re|incorrect": 4,
+          "low_des|correct": 3,
+          "low_des|incorrect": 1,
+          "high_des|correct": 4,
+          "high_des|incorrect": 2
+        };
 
         var blocks = [[], [], [], []];
-        var baseBlockSize =
-          Math.floor(
-            shuffledStimuli.length / 4
-          );
-        var remainder =
-          shuffledStimuli.length % 4;
-        var stimulusIndex = 0;
+
+        conditions.forEach(
+          function(conditionName) {
+            statuses.forEach(
+              function(statusName) {
+                var cellKey =
+                  conditionName +
+                  "|" +
+                  statusName;
+
+                var cellItems =
+                  jsPsych.randomization.shuffle(
+                    stimuli.filter(
+                      function(item) {
+                        return (
+                          item.condition ===
+                            conditionName &&
+                          item.analysis_status ===
+                            statusName
+                        );
+                      }
+                    )
+                  );
+
+                if (cellItems.length !== 15) {
+                  throw new Error(
+                    "Expected 15 trials in cell " +
+                    cellKey +
+                    ", but found " +
+                    cellItems.length +
+                    "."
+                  );
+                }
+
+                var cellIndex = 0;
+
+                for (
+                  var blockIndex = 0;
+                  blockIndex < 4;
+                  blockIndex++
+                ) {
+                  var blockNumber =
+                    blockIndex + 1;
+
+                  var numberForBlock =
+                    threeItemBlock[cellKey] ===
+                    blockNumber
+                      ? 3
+                      : 4;
+
+                  for (
+                    var itemNumber = 0;
+                    itemNumber < numberForBlock;
+                    itemNumber++
+                  ) {
+                    blocks[blockIndex].push(
+                      cellItems[cellIndex]
+                    );
+
+                    cellIndex++;
+                  }
+                }
+              }
+            );
+          }
+        );
+
         var overallOrder = 1;
 
-        for (
-          var blockIndex = 0;
-          blockIndex < 4;
-          blockIndex++
-        ) {
-          var thisBlockSize =
-            baseBlockSize +
-            (
-              blockIndex < remainder
-                ? 1
-                : 0
-            );
+        blocks =
+          blocks.map(
+            function(blockItems, blockIndex) {
+              if (blockItems.length !== 30) {
+                throw new Error(
+                  "Block " +
+                  (blockIndex + 1) +
+                  " should contain 30 trials, but contains " +
+                  blockItems.length +
+                  "."
+                );
+              }
 
-          for (
-            var position = 1;
-            position <= thisBlockSize;
-            position++
-          ) {
-            blocks[blockIndex].push(
-              Object.assign(
-                {},
-                shuffledStimuli[
-                  stimulusIndex
-                ],
-                {
-                  experimental_block:
-                    blockIndex + 1,
-                  block_trial:
-                    position,
-                  randomized_trial_order:
-                    overallOrder
+              var shuffledBlock =
+                jsPsych.randomization.shuffle(
+                  blockItems.slice()
+                );
+
+              return shuffledBlock.map(
+                function(item, itemIndex) {
+                  var itemWithOrder =
+                    Object.assign(
+                      {},
+                      item,
+                      {
+                        experimental_block:
+                          blockIndex + 1,
+                        block_trial:
+                          itemIndex + 1,
+                        randomized_trial_order:
+                          overallOrder
+                      }
+                    );
+
+                  overallOrder++;
+
+                  return itemWithOrder;
                 }
-              )
-            );
-
-            stimulusIndex++;
-            overallOrder++;
-          }
-        }
+              );
+            }
+          );
 
         return blocks;
       }
@@ -913,7 +1345,6 @@
             <div class="rating-sentence">
               ${escapeHtml(sentence)}
             </div>
-
             <div
               class="rating-scale"
               role="group"
@@ -1010,11 +1441,11 @@
 
         stimulus: `
           <div class="text-screen">
-            <h1>Welcome to this experiment!</h1>
+            <h1>Bem-vindo(a) a este experimento!</h1>
 
             <p>
-              Please read the consent form below before deciding whether
-              you would like to participate.
+              Por favor, leia o termo de consentimento abaixo antes de decidir
+              se deseja participar.
             </p>
 
             <iframe
@@ -1035,18 +1466,18 @@
                 rel="noopener"
                 style="color:white;text-decoration:underline;"
               >
-                Open the consent form in a new tab
+                Abrir o termo de consentimento em uma nova aba
               </a>
             </p>
 
             <p class="continue-prompt">
-              If you have read the consent form and agree to participate,
-              select <strong>I agree and wish to continue</strong>.
+              Se você leu o termo de consentimento e concorda em participar,
+              selecione <strong>Concordo e desejo continuar</strong>.
             </p>
 
             <p class="continue-prompt">
-              If you do not agree to participate, select
-              <strong>I do not agree</strong>.
+              Se você não concorda em participar, selecione
+              <strong>Não concordo</strong>.
             </p>
 
             <div style="
@@ -1061,7 +1492,7 @@
                 type="button"
                 style="font-size:18px;padding:12px 18px;cursor:pointer;"
               >
-                I agree and wish to continue
+                Concordo e desejo continuar
               </button>
 
               <button
@@ -1069,7 +1500,7 @@
                 type="button"
                 style="font-size:18px;padding:12px 18px;cursor:pointer;"
               >
-                I do not agree
+                Não concordo
               </button>
             </div>
           </div>
@@ -1123,8 +1554,8 @@
 
           if (!data.consent_given) {
             jsPsych.abortExperiment(
-              "<p>Thank you for your interest! You chose not to participate. " +
-              "You may close this window.</p>"
+              "<p>Obrigado pelo seu interesse! Você optou por não participar. " +
+              "Você pode fechar esta janela.</p>"
             );
           }
         }
@@ -1137,93 +1568,116 @@
       // 5. TASK INSTRUCTIONS
       // ==============================================================
 
-      var instructionsScreen = {
+      var instructionsScreen1 = {
         type: jsPsychHtmlKeyboardResponse,
 
         stimulus: `
           <div class="text-screen">
-            <h1>Instructions</h1>
+            <h1>Instruções</h1>
 
             <p>
-              In this experiment, you will be presented with words,
-              together with paraphrases of their meanings.
+              Neste experimento, você verá palavras acompanhadas de
+              frases descrevendo seu significado.
             </p>
 
             <p>
-              Your task is to rate how well each paraphrase describes
-              the meaning of the corresponding word, using a scale
-              from <strong>1</strong> to <strong>7</strong>.
+              Sua tarefa é avaliar quão bem cada frase descreve
+              o significado da palavra correspondente, usando uma escala
+              de <strong>1</strong> a <strong>7</strong>.
+            </p>
+
+            <p>&nbsp;</p>
+
+            <p>
+              <strong>Selecione 1 se a frase descrever muito
+              MAL o significado da palavra</strong> — isto é, se você não
+              aceitar de forma alguma esse significado para a palavra.
             </p>
 
             <p>
-              Select <strong>1</strong> if the paraphrase does a very
-              poor job of describing the meaning—that is, if you do
-              not accept this meaning for the word at all.
+              <strong>Selecione 7 se a frase descrever
+              PERFEITAMENTE o significado da palavra</strong> — isto é, se esse
+              for o significado que você normalmente associaria àquela
+              palavra.
+            </p>
+            
+            <p>&nbsp;</p>
+
+            <p>
+              <strong>Caso você nunca tenha ouvido a palavra antes,
+              pense no significado que você atribuiria a ela 
+              caso a usasse, ou na interpretação que você provavelmente
+              faria caso oussive alguém a usando. </strong>              
             </p>
 
             <p>
-              Select <strong>7</strong> if the paraphrase does a
-              perfect job of describing the meaning—that is, if this
-              is the meaning you would normally associate with that
-              word.
+              Faça uso dos números intermediários para indicar graus
+              intermediários de adequação entre os dois extremos:
+              quanto mais próximo ao número 1, pior a adequação;
+              quanto mais próximo ao número 7, melhor a adequação. 
+            </p>
+
+             <p>&nbsp;</p>
+
+            <p>
+              <strong>Você verá botões de 1 a 7 na tela</strong>. Você pode
+              clicar neles com o mouse ou usar as teclas 1–7 do
+              teclado. Qualquer que seja o método escolhido, por favor,
+              use o mesmo ao longo de todo o experimento. Você poderá
+              testar os dois durante a seção de prática.
             </p>
 
             <p>
-              Use the numbers in between to indicate intermediate
-              degrees of fit between these two endpoints, with lower
-              numbers indicating a poorer fit and higher numbers
-              indicating a better fit.
+              Não há respostas certas ou erradas, então pedimos que você
+              responda da forma mais espontânea possível.
             </p>
-
-            <p>
-              You will see buttons from 1 to 7 on the screen. You can
-              either use the mouse to click them or use your keyboard
-              to press the keys 1–7. Whichever method you choose,
-              please be consistent throughout the experiment. You can
-              test both during the practice section.
-            </p>
-
-            <p>
-              There are no correct answers, but please respond as
-              honestly and as quickly as possible. Do not take a long
-              time reasoning about the paraphrase.
-            </p>
-
-            <p>
-              The practice section will take approximately a couple of
-              minutes, and the main experiment will take approximately
-              15 minutes. The main experiment is divided into four
-              blocks, with three breaks.
-            </p>
-
-            <p>
-              Please complete the study in one session. Do not begin the
-              experiment if you do not have sufficient time to complete
-              it.
-            </p>
-
-            <p>
-              When you are done with the experiment, you will be asked to
-              fill out a survey about your language background.
-            </p>
-
-            <p>
-              Please remember that it is important that you respond as
-              quickly and accurately as possible.
-            </p>
-
             <p class="continue-prompt">
-              Press any key to continue to the practice.
+              Pressione qualquer tecla para continuar.
             </p>
           </div>
         `,
 
         data: {
-          task: "instructions"
+          task: "instructions_1"
         }
       };
 
-      timeline.push(instructionsScreen);
+      var instructionsScreen2 = {
+        type: jsPsychHtmlKeyboardResponse,
+
+        stimulus: `
+          <div class="text-screen">
+
+            <p>
+              Por favor, complete o estudo em uma única sessão. Não o inicie
+              caso saiba que não terá tempo suficiente para concluí-lo.
+            </p>
+
+            <p>
+              A seção de prática levará aproximadamente dois minutos
+              e o experimento principal levará aproximadamente
+              15 minutos. O experimento principal é dividido em quatro
+              blocos. Entre eles, você poderá fazer três pausas para descansar.
+            </p>
+
+            <p>
+              Ao final do experimento, pediremos que você preencha um breve
+              questionário sobre seu histórico linguístico.
+            </p>
+
+            <p class="continue-prompt">
+              Pressione qualquer tecla para continuar para a prática.
+            </p>
+          </div>
+        `,
+
+        data: {
+          task: "instructions_2"
+        }
+      };
+
+      timeline.push(instructionsScreen1);
+      timeline.push(instructionsScreen2);
 
 
       // ==============================================================
@@ -1255,19 +1709,19 @@
 
         stimulus: `
           <div class="text-screen">
-            <h1>Practice</h1>
+            <h1>Prática</h1>
 
             <p>
-              You will now complete three practice trials.
+              Agora você fará três itens de prática.
             </p>
 
             <p>
-              After each response, you will receive feedback explaining
-              whether you used the scale as intended for that example.
+              Após cada resposta, você receberá um feedback indicando
+              se usou a escala da maneira esperada naquele exemplo.
             </p>
 
             <p class="continue-prompt">
-              Press any key to begin the practice.
+              Pressione qualquer tecla para iniciar a prática.
             </p>
           </div>
         `,
@@ -1375,12 +1829,12 @@
               </p>
 
               <p>
-                Your response was
+                Sua resposta foi
                 <strong>${lastRating.rating}</strong>.
               </p>
 
               <p class="continue-prompt">
-                Press any key to continue.
+                Pressione qualquer tecla para continuar.
               </p>
             </div>
           `;
@@ -1416,16 +1870,16 @@
 
         stimulus: `
           <div class="text-screen">
-            <h1>Practice complete</h1>
+            <h1>Prática concluída</h1>
 
             <p>
-              Press <strong>C</strong> if you understand
-              the task and are ready to continue.
+              Pressione <strong>C</strong> se você entendeu
+              a tarefa e está pronto(a) para continuar.
             </p>
 
             <p>
-              Press <strong>R</strong> if you would like
-              to repeat the three practice trials.
+              Pressione <strong>R</strong> se quiser
+              repetir os três itens de prática.
             </p>
           </div>
         `,
@@ -1474,13 +1928,24 @@
         );
 
       var mainStimuli =
-        loadedMainStimuli.stimuli;
+        loadedMainStimuli.stimuli
+          .filter(function(item) {
+            return (
+              Number(item.version) ===
+              counterbalanceVersion
+            );
+          });
 
       var mainStimulusColumns =
         loadedMainStimuli.headers;
 
+      validateCounterbalancedVersion(
+        mainStimuli,
+        counterbalanceVersion
+      );
+
       var mainBlocks =
-        divideIntoFourBlocks(
+        divideIntoFourBalancedBlocks(
           mainStimuli
         );
 
@@ -1494,25 +1959,25 @@
 
         stimulus: `
           <div class="text-screen">
-            <h1>You are now ready for the main experiment!</h1>
+            <h1>Agora você está pronto(a) para o experimento principal!</h1>
 
-            <p>To participate effectively, please:</p>
+            <p>Para participar adequadamente, por favor:</p>
 
             <ul>
-              <li>Maximize your window.</li>
-              <li>Turn off your phone, notifications, and music.</li>
-              <li>Avoid distractions.</li>
-              <li>Avoid non-programmed breaks.</li>
+              <li>Maximize a janela do navegador.</li>
+              <li>Desative o celular, as notificações e a música.</li>
+              <li>Evite distrações.</li>
+              <li>Evite pausas que não estejam previstas.</li>
             </ul>
 
             <p>
-              The practice feedback will no longer appear. Continue
-              rating each word–description pair from
-              <strong>1</strong> to <strong>7</strong>.
+              O feedback da prática não aparecerá mais. Continue
+              avaliando cada par formado por uma palavra e uma frase
+              usando a escala de <strong>1</strong> a <strong>7</strong>.
             </p>
 
             <p class="continue-prompt">
-              Press the space bar to begin.
+              Pressione a barra de espaço para começar.
             </p>
           </div>
         `,
@@ -1537,7 +2002,7 @@
 
       /*
        * Preserve every spreadsheet column in the output.
-       * Additional columns can be added freely to main_stimuli.csv.
+       * Additional columns can be added freely to main_stimuli_counterbalanced.csv.
        */
       var mainStimulusDataFields = {};
 
@@ -1611,20 +2076,20 @@
 
           stimulus: `
             <div class="text-screen">
-              <h1>Pause</h1>
+              <h1>Pausa</h1>
 
               <p>
-                You have completed block
-                ${completedBlock} of 4.
+                Você concluiu o bloco
+                ${completedBlock} de 4.
               </p>
 
               <p>
-                You may take a short break.
+                Você pode fazer uma breve pausa.
               </p>
 
               <p class="continue-prompt">
-                Press any key when you are ready
-                to continue.
+                Pressione qualquer tecla quando estiver pronto(a)
+                para continuar.
               </p>
             </div>
           `,
@@ -1644,8 +2109,8 @@
 
 
       /*
-       * The spreadsheet is shuffled once and divided automatically into
-       * four nearly equal blocks. The resulting order is retained.
+       * The selected counterbalance version is distributed into four
+       * balanced 30-trial blocks. Trial order is randomized within each block.
        */
       for (
         var blockNumber = 1;
@@ -1696,11 +2161,11 @@
 
           return `
             <div class="text-screen">
-              <h1>The main task is complete</h1>
+              <h1>A tarefa principal foi concluída</h1>
 
               <p class="continue-prompt">
-                Press any key to continue to a final
-                language-background questionnaire.
+                Pressione qualquer tecla para continuar para um
+                questionário final sobre seu histórico linguístico.
               </p>
             </div>
           `;
@@ -1725,41 +2190,41 @@
       function languageBackgroundSurveyHtml() {
         return `
           <form id="language-background-form" class="language-survey">
-            <h1>Language background questionnaire</h1>
+            <h1>Questionário sobre histórico linguístico</h1>
 
             <p class="language-survey-intro">
-              The following questions ask about your Brazilian Portuguese
-              language background, exposure to other languages, current
-              language use, and places where you have lived.
+              As perguntas a seguir tratam do seu histórico com o português
+              brasileiro, do contato com outras línguas, do seu uso atual
+              de línguas e dos lugares onde você já morou.
             </p>
 
             <p class="survey-required-note">
-              Fields marked with an asterisk (*) are required.
+              Os campos marcados com um asterisco (*) são obrigatórios.
             </p>
 
             <div class="survey-question">
               <fieldset>
-                <legend>Gender: *</legend>
+                <legend>Gênero: *</legend>
 
                 <div class="survey-options">
                   <label class="survey-option">
                     <input type="radio" name="gender" value="Male" required>
-                    <span>Male</span>
+                    <span>Masculino</span>
                   </label>
 
                   <label class="survey-option">
                     <input type="radio" name="gender" value="Female">
-                    <span>Female</span>
+                    <span>Feminino</span>
                   </label>
 
                   <label class="survey-option">
                     <input type="radio" name="gender" value="Nonbinary">
-                    <span>Nonbinary</span>
+                    <span>Não binário</span>
                   </label>
 
                   <label class="survey-option">
                     <input type="radio" name="gender" value="Other">
-                    <span>Other</span>
+                    <span>Outro</span>
                   </label>
 
                   <label class="survey-option">
@@ -1768,7 +2233,7 @@
                       name="gender"
                       value="I don't want to specify"
                     >
-                    <span>I don’t want to specify</span>
+                    <span>Prefiro não informar</span>
                   </label>
                 </div>
 
@@ -1777,7 +2242,7 @@
                   class="conditional-survey"
                 >
                   <label for="gender_other">
-                    Please specify:
+                    Por favor, especifique:
                   </label>
 
                   <input
@@ -1793,7 +2258,7 @@
 
             <div class="survey-inline-grid">
               <div class="survey-question">
-                <label for="age">Age: *</label>
+                <label for="age">Idade: *</label>
 
                 <input
                   id="age"
@@ -1808,34 +2273,34 @@
 
               <div class="survey-question">
                 <label for="education">
-                  Highest level of education: *
+                  Nível de escolaridade mais alto: *
                 </label>
 
                 <select id="education" name="education" required>
-                  <option value="">Select one</option>
+                  <option value="">Selecione uma opção</option>
                   <option value="incomplete high school">
-                    Incomplete high school
+                    Ensino médio incompleto
                   </option>
                   <option value="complete high school">
-                    Complete high school
+                    Ensino médio completo
                   </option>
                   <option value="incomplete technical education">
-                    Incomplete technical education
+                    Ensino técnico incompleto
                   </option>
                   <option value="complete technical education">
-                    Complete technical education
+                    Ensino técnico completo
                   </option>
                   <option value="incomplete undergraduate education">
-                    Incomplete undergraduate education
+                    Ensino superior incompleto
                   </option>
                   <option value="complete undergraduate education">
-                    Complete undergraduate education
+                    Ensino superior completo
                   </option>
                   <option value="incomplete graduate education">
-                    Incomplete graduate education
+                    Pós-graduação incompleta
                   </option>
                   <option value="complete graduate education">
-                    Complete graduate education
+                    Pós-graduação completa
                   </option>
                 </select>
               </div>
@@ -1843,7 +2308,7 @@
 
             <div class="survey-question">
               <label for="daily_languages">
-                Which language(s) do you predominantly use in daily life? *
+                Qual(is) língua(s) você usa predominantemente no dia a dia? *
               </label>
 
               <input
@@ -1857,8 +2322,8 @@
             <div class="survey-question">
               <fieldset>
                 <legend>
-                  Were you exposed to any other languages besides
-                  Brazilian Portuguese at home when growing up? *
+                  Durante sua infância, você teve contato em casa com alguma
+                  língua além do português brasileiro? *
                 </legend>
 
                 <div class="survey-options">
@@ -1869,7 +2334,7 @@
                       value="yes"
                       required
                     >
-                    <span>Yes</span>
+                    <span>Sim</span>
                   </label>
 
                   <label class="survey-option">
@@ -1878,7 +2343,7 @@
                       name="home_other_language"
                       value="no"
                     >
-                    <span>No</span>
+                    <span>Não</span>
                   </label>
                 </div>
 
@@ -1887,12 +2352,12 @@
                   class="conditional-survey"
                 >
                   <div class="survey-question-title">
-                    Please answer the following about the other
-                    language(s):
+                    Por favor, responda às perguntas a seguir sobre
+                    a(s) outra(s) língua(s):
                   </div>
 
                   <label for="home_languages">
-                    Which language(s)?
+                    Qual(is) língua(s)?
                   </label>
 
                   <input
@@ -1907,8 +2372,8 @@
                     for="home_exposure_years"
                     style="margin-top:16px;"
                   >
-                    For approximately how many years were you exposed
-                    to this language?
+                    Por aproximadamente quantos anos você teve contato
+                    com essa língua?
                   </label>
 
                   <input
@@ -1926,9 +2391,9 @@
                     for="home_relative_use"
                     style="margin-top:16px;"
                   >
-                    Would you say you spoke this language more than,
-                    less than, or about the same amount as Brazilian
-                    Portuguese at home?
+                    Você diria que falava essa língua em casa mais do que,
+                    menos do que ou aproximadamente na mesma proporção
+                    que o português brasileiro?
                   </label>
 
                   <select
@@ -1937,15 +2402,15 @@
                     data-required-when-visible="true"
                     disabled
                   >
-                    <option value="">Select one</option>
+                    <option value="">Selecione uma opção</option>
                     <option value="more than Brazilian Portuguese">
-                      More than Brazilian Portuguese
+                      Mais do que o português brasileiro
                     </option>
                     <option value="less than Brazilian Portuguese">
-                      Less than Brazilian Portuguese
+                      Menos do que o português brasileiro
                     </option>
                     <option value="about the same as Brazilian Portuguese">
-                      About the same as Brazilian Portuguese
+                      Aproximadamente o mesmo que o português brasileiro
                     </option>
                   </select>
                 </div>
@@ -1955,9 +2420,8 @@
             <div class="survey-question">
               <fieldset>
                 <legend>
-                  Were you exposed to any other languages besides
-                  Brazilian Portuguese in a school or work
-                  environment? *
+                  Você teve contato com alguma língua além do português
+                  brasileiro em ambiente escolar ou de trabalho? *
                 </legend>
 
                 <div class="survey-options">
@@ -1968,7 +2432,7 @@
                       value="yes"
                       required
                     >
-                    <span>Yes</span>
+                    <span>Sim</span>
                   </label>
 
                   <label class="survey-option">
@@ -1977,7 +2441,7 @@
                       name="school_work_other_language"
                       value="no"
                     >
-                    <span>No</span>
+                    <span>Não</span>
                   </label>
                 </div>
 
@@ -1986,12 +2450,12 @@
                   class="conditional-survey"
                 >
                   <div class="survey-question-title">
-                    Please answer the following about the other
-                    language(s):
+                    Por favor, responda às perguntas a seguir sobre
+                    a(s) outra(s) língua(s):
                   </div>
 
                   <label for="school_work_languages">
-                    Which language(s)?
+                    Qual(is) língua(s)?
                   </label>
 
                   <input
@@ -2006,8 +2470,8 @@
                     for="school_work_exposure_years"
                     style="margin-top:16px;"
                   >
-                    For approximately how many years were you exposed
-                    to this language?
+                    Por aproximadamente quantos anos você teve contato
+                    com essa língua?
                   </label>
 
                   <input
@@ -2025,9 +2489,9 @@
                     for="school_work_relative_use"
                     style="margin-top:16px;"
                   >
-                    Would you say you spoke this language more than,
-                    less than, or about the same amount as Brazilian
-                    Portuguese in school or at work?
+                    Você diria que falava essa língua na escola ou no trabalho
+                    mais do que, menos do que ou aproximadamente na mesma
+                    proporção que o português brasileiro?
                   </label>
 
                   <select
@@ -2036,15 +2500,15 @@
                     data-required-when-visible="true"
                     disabled
                   >
-                    <option value="">Select one</option>
+                    <option value="">Selecione uma opção</option>
                     <option value="more than Brazilian Portuguese">
-                      More than Brazilian Portuguese
+                      Mais do que o português brasileiro
                     </option>
                     <option value="less than Brazilian Portuguese">
-                      Less than Brazilian Portuguese
+                      Menos do que o português brasileiro
                     </option>
                     <option value="about the same as Brazilian Portuguese">
-                      About the same as Brazilian Portuguese
+                      Aproximadamente o mesmo que o português brasileiro
                     </option>
                   </select>
                 </div>
@@ -2054,8 +2518,8 @@
             <div class="survey-inline-grid">
               <div class="survey-question">
                 <label for="brazil_growing_up_years">
-                  For how many years did you live in Brazil when
-                  growing up? *
+                  Por quantos anos você morou no Brasil durante
+                  sua infância e adolescência? *
                 </label>
 
                 <input
@@ -2071,7 +2535,7 @@
 
               <div class="survey-question">
                 <label for="current_country">
-                  Which country do you currently live in? *
+                  Em que país você mora atualmente? *
                 </label>
 
                 <input
@@ -2085,7 +2549,7 @@
                   for="current_country_years"
                   style="margin-top:16px;"
                 >
-                  For how many years have you lived in this country? *
+                  Há quantos anos você mora nesse país? *
                 </label>
 
                 <input
@@ -2103,8 +2567,8 @@
             <div class="survey-question">
               <fieldset>
                 <legend>
-                  Have you lived in places where any other languages
-                  are spoken? *
+                  Você já morou em lugares onde outras línguas
+                  são faladas? *
                 </legend>
 
                 <div class="survey-options">
@@ -2115,7 +2579,7 @@
                       value="yes"
                       required
                     >
-                    <span>Yes</span>
+                    <span>Sim</span>
                   </label>
 
                   <label class="survey-option">
@@ -2124,7 +2588,7 @@
                       name="lived_other_language_places"
                       value="no"
                     >
-                    <span>No</span>
+                    <span>Não</span>
                   </label>
                 </div>
 
@@ -2133,7 +2597,7 @@
                   class="conditional-survey"
                 >
                   <label for="other_language_places">
-                    Please describe the place(s) and language(s):
+                    Por favor, descreva o(s) lugar(es) e a(s) língua(s):
                   </label>
 
                   <textarea
@@ -2148,7 +2612,7 @@
 
             <div class="survey-question">
               <label for="language_background_comments">
-                Do you have any other comments?
+                Você tem algum outro comentário?
               </label>
 
               <textarea
@@ -2163,7 +2627,7 @@
                 type="button"
                 class="survey-submit-button"
               >
-                Submit questionnaire and save data
+                Enviar questionário e salvar dados
               </button>
             </div>
           </form>
@@ -2330,7 +2794,7 @@
             */
             submitButton.disabled = true;
             submitButton.textContent =
-              "Submitting questionnaire...";
+              "Enviando questionário...";
 
             var formData =
               new FormData(form);
@@ -2429,7 +2893,7 @@
 
           stimulus:
             '<p style="font-size:24px;">' +
-            'Please hang tight, we are saving your data...' +
+            'Por favor, aguarde enquanto salvamos seus dados...' +
             '</p>',
 
           choices: "NO_KEYS",
@@ -2454,9 +2918,9 @@
 
                 displayElement.innerHTML =
                   '<p style="font-size:24px;">' +
-                  'Data saved successfully!' +
+                  'Dados salvos com sucesso!' +
                   '</p>' +
-                  '<p>You can close this window now.</p>';
+                  '<p>Você já pode fechar esta janela.</p>';
               })
               .catch(function(error) {
                 console.error(
@@ -2472,7 +2936,7 @@
 
                 displayElement.innerHTML =
                   '<p style="font-size:24px;">' +
-                  'The local data could not be saved.' +
+                  'Não foi possível salvar os dados localmente.' +
                   '</p>' +
                   '<p>' +
                   escapeHtml(error.message) +
@@ -2513,9 +2977,9 @@
 
           stimulus:
             '<p style="font-size:24px;">' +
-            'Data saved successfully.' +
+            'Dados salvos com sucesso.' +
             '</p>' +
-            '<p>You can close this window.</p>',
+            '<p>Você pode fechar esta janela.</p>',
 
           choices: "NO_KEYS",
 
@@ -2551,7 +3015,7 @@
             font-family:Arial,sans-serif;
             line-height:1.5;
           ">
-            <h1>Experiment could not start</h1>
+            <h1>Não foi possível iniciar o experimento</h1>
 
             <p>
               ${String(error.message)
@@ -2561,9 +3025,10 @@
             </p>
 
             <p>
-              Confirm that practice_stimuli.csv and main_stimuli.csv
-              are in the same folder as exp1.html and that the
-              experiment is being opened through a server.
+              Confirme se os arquivos practice_stimuli.csv e
+              main_stimuli_counterbalanced.csv estão na mesma pasta que
+              este arquivo HTML e se o experimento está sendo aberto
+              por meio de um servidor.
             </p>
           </main>
         `;
