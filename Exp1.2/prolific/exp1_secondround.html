@@ -332,13 +332,15 @@
       var CONSENT_PDF_FILE = "consent.pdf";
 
       /*
-       * Keep main_stimuli_des_secondround.csv in the same folder as this HTML file.
+       * Keep main_stimuli_des_secondround_counterbalanced.csv in the same folder
+       * as this HTML file.
        *
        * Replace the DataPipe placeholder before putting the experiment
        * online. Do not put your private OSF token in this file.
        */
       var PRACTICE_STIMULI_FILE = "practice_stimuli.csv";
-      var MAIN_STIMULI_FILE = "main_stimuli_des_secondround.csv";
+      var MAIN_STIMULI_FILE =
+        "main_stimuli_des_secondround_counterbalanced.csv";
       var DATAPIPE_EXPERIMENT_ID =
         "7xrpzvYgeAtA";
 
@@ -363,8 +365,10 @@
 
       if (window.location.protocol === "file:") {
         throw new Error(
-          "This experiment loads practice_stimuli.csv and main_stimuli_des_secondround.csv. Run it through " +
-          "http://localhost:8000/ instead of double-clicking exp1_des_secondround.html."
+          "This experiment loads practice_stimuli.csv and " +
+          "main_stimuli_des_secondround_counterbalanced.csv. Run it through " +
+          "http://localhost:8000/ instead of double-clicking " +
+          "exp1_secondround_counterbalanced.html."
         );
       }
 
@@ -484,6 +488,151 @@
           ? "prolific"
           : "personal_recruitment";
 
+      /*
+       * Four-list counterbalancing
+       * --------------------------
+       * DataPipe must have condition assignment enabled for four
+       * conditions. Its sequential values 0, 1, 2, and 3 map to A1, A2,
+       * B1, and B2. Across twelve completed participants this gives three
+       * participants per list and six participants per target version.
+       *
+       * For testing, append ?list=A1, ?list=A2, ?list=B1, or ?list=B2.
+       * A URL-selected list takes precedence and does not request a new
+       * DataPipe condition. Otherwise, the online assignment is cached in
+       * sessionStorage so refreshing the page keeps the same list.
+       */
+      async function resolveExperimentalList() {
+        var validLists = ["A1", "A2", "B1", "B2"];
+        var requestedList =
+          String(urlParameters.get("list") || "")
+            .trim()
+            .toUpperCase();
+
+        if (requestedList !== "") {
+          if (!validLists.includes(requestedList)) {
+            throw new Error(
+              'The URL parameter "list" must be A1, A2, B1, or B2.'
+            );
+          }
+
+          return {
+            list: requestedList,
+            assignment_method: "url_parameter"
+          };
+        }
+
+        if (IS_LOCAL_RUN) {
+          return {
+            list:
+              validLists[
+                Number(participantId) % validLists.length
+              ],
+            assignment_method:
+              "local_internal_participant_id_modulo"
+          };
+        }
+
+        var storageKey =
+          "semantic_norming_des_secondround_experimental_list";
+
+        try {
+          var cachedList =
+            window.sessionStorage.getItem(
+              storageKey
+            );
+
+          if (validLists.includes(cachedList)) {
+            return {
+              list: cachedList,
+              assignment_method:
+                "datapipe_sequential_cached"
+            };
+          }
+        } catch (error) {
+          // Continue to DataPipe if sessionStorage is unavailable.
+        }
+
+        var response =
+          await fetch(
+            "https://pipe.jspsych.org/api/condition/",
+            {
+              method: "POST",
+              headers: {
+                "Content-Type":
+                  "application/json"
+              },
+              body: JSON.stringify({
+                experimentID:
+                  DATAPIPE_EXPERIMENT_ID
+              })
+            }
+          );
+
+        var payload = {};
+
+        try {
+          payload = await response.json();
+        } catch (error) {
+          throw new Error(
+            "DataPipe returned an unreadable condition-assignment response."
+          );
+        }
+
+        if (!response.ok) {
+          throw new Error(
+            "Could not obtain a list assignment from DataPipe. " +
+            (payload.message || "Unknown DataPipe error.") +
+            " Confirm that condition assignment is enabled and " +
+            "configured for four conditions."
+          );
+        }
+
+        var conditionNumber =
+          Number(payload.condition);
+
+        if (
+          !Number.isInteger(conditionNumber) ||
+          conditionNumber < 0 ||
+          conditionNumber > 3
+        ) {
+          throw new Error(
+            "DataPipe returned condition " +
+            String(payload.condition) +
+            ". This experiment requires conditions 0-3."
+          );
+        }
+
+        var assignedList =
+          validLists[conditionNumber];
+
+        try {
+          window.sessionStorage.setItem(
+            storageKey,
+            assignedList
+          );
+        } catch (error) {
+          // Assignment still works if sessionStorage is unavailable.
+        }
+
+        return {
+          list: assignedList,
+          assignment_method:
+            "datapipe_sequential"
+        };
+      }
+
+      var listAssignment =
+        await resolveExperimentalList();
+
+      var experimentalList =
+        listAssignment.list;
+
+      var targetVersion =
+        experimentalList.charAt(0);
+
+      var fillerRotation =
+        experimentalList.charAt(1);
+
       var sessionTimestamp =
         new Date()
           .toISOString()
@@ -492,6 +641,8 @@
 
       var dataFileStem =
         "semantic_norming_des_secondround_" +
+        experimentalList +
+        "_" +
         recruitmentSource +
         "_" +
         participantId +
@@ -512,6 +663,14 @@
         run_mode: RUN_MODE,
         session_timestamp_utc:
           sessionTimestamp,
+        experimental_list:
+          experimentalList,
+        target_version:
+          targetVersion,
+        filler_rotation:
+          fillerRotation,
+        list_assignment_method:
+          listAssignment.assignment_method,
         experiment_name:
           "semantic_norming_des_secondround"
       });
@@ -667,7 +826,11 @@
           "word",
           "sentence",
           "reading",
-          "analysis_status"
+          "analysis_status",
+          "stimulus_round",
+          "target_version",
+          "experimental_list",
+          "original_version"
         ];
 
         requiredColumns.forEach(
@@ -879,184 +1042,284 @@
 
 
       /*
-       * This second-round file contains 74 DES words. Each word has two
-       * rows: one low-reading paraphrase and one high-reading paraphrase.
-       * Every participant rates all 148 word-paraphrase pairs.
+       * Select one of four preconstructed lists from the master CSV.
+       * A1 and A2 share target Version A but use different old-item
+       * rotations; B1 and B2 contain the complementary target readings.
        */
-      function validateSecondRoundStimuli(
-        stimuli
+      function selectAndValidateExperimentalList(
+        stimuli,
+        assignedList
       ) {
-        if (stimuli.length !== 148) {
+        var assignedTargetVersion =
+          assignedList.charAt(0);
+
+        var newTargets =
+          stimuli.filter(function(item) {
+            return (
+              item.stimulus_round ===
+                "new_high_des" &&
+              item.target_version ===
+                assignedTargetVersion
+            );
+          });
+
+        var oldFillers =
+          stimuli.filter(function(item) {
+            return (
+              item.stimulus_round ===
+                "first_round_retest" &&
+              item.experimental_list ===
+                assignedList
+            );
+          });
+
+        var selectedStimuli =
+          newTargets
+            .concat(oldFillers)
+            .map(function(item) {
+              return Object.assign(
+                {},
+                item,
+                {
+                  target_version:
+                    assignedTargetVersion,
+                  experimental_list:
+                    assignedList,
+                  filler_rotation:
+                    assignedList.charAt(1)
+                }
+              );
+            });
+
+        var expectedFillerCount =
+          assignedList.endsWith("1")
+            ? 68
+            : 67;
+
+        var expectedTotal =
+          74 + expectedFillerCount;
+
+        if (newTargets.length !== 74) {
           throw new Error(
-            "The second-round file must contain exactly 148 rows " +
-            "(74 words × 2 readings). Found " +
-            stimuli.length +
-            "."
+            "List " + assignedList +
+            " must contain 74 new high_des targets. Found " +
+            newTargets.length + "."
           );
         }
 
-        var itemsByLexicalId = {};
+        if (oldFillers.length !== expectedFillerCount) {
+          throw new Error(
+            "List " + assignedList +
+            " must contain " + expectedFillerCount +
+            " old fillers. Found " + oldFillers.length + "."
+          );
+        }
 
-        stimuli.forEach(function(item) {
-          if (item.condition !== "high_des") {
-            throw new Error(
-              "All second-round stimuli must have condition high_des. " +
-              "Found " + item.condition + " for " + item.item_id + "."
-            );
-          }
-
-          if (!itemsByLexicalId[item.lexical_item_id]) {
-            itemsByLexicalId[item.lexical_item_id] = [];
-          }
-
-          itemsByLexicalId[item.lexical_item_id].push(item);
-        });
+        if (selectedStimuli.length !== expectedTotal) {
+          throw new Error(
+            "List " + assignedList +
+            " must contain " + expectedTotal +
+            " total trials. Found " +
+            selectedStimuli.length + "."
+          );
+        }
 
         var lexicalIds =
-          Object.keys(itemsByLexicalId);
+          selectedStimuli.map(function(item) {
+            return item.lexical_item_id;
+          });
 
-        if (lexicalIds.length !== 74) {
+        if (
+          new Set(lexicalIds).size !==
+          lexicalIds.length
+        ) {
           throw new Error(
-            "The second-round file must contain 74 lexical_item_id values. " +
-            "Found " + lexicalIds.length + "."
+            "List " + assignedList +
+            " contains both readings of at least one word."
           );
         }
 
-        lexicalIds.forEach(function(lexicalId) {
-          var pair = itemsByLexicalId[lexicalId];
+        var targetHighCount =
+          newTargets.filter(function(item) {
+            return item.reading === "high";
+          }).length;
 
-          if (pair.length !== 2) {
+        var targetLowCount =
+          newTargets.filter(function(item) {
+            return item.reading === "low";
+          }).length;
+
+        if (
+          targetHighCount !== 37 ||
+          targetLowCount !== 37
+        ) {
+          throw new Error(
+            "List " + assignedList +
+            " must contain 37 high and 37 low new readings."
+          );
+        }
+
+        var expectedConditionCounts = {
+          A1: {
+            high_in: 23,
+            low_des: 23,
+            high_des: 22
+          },
+          A2: {
+            high_in: 22,
+            low_des: 22,
+            high_des: 23
+          },
+          B1: {
+            high_in: 23,
+            low_des: 22,
+            high_des: 23
+          },
+          B2: {
+            high_in: 22,
+            low_des: 23,
+            high_des: 22
+          }
+        };
+
+        [
+          "high_in",
+          "low_des",
+          "high_des"
+        ].forEach(function(conditionName) {
+          var observedCount =
+            oldFillers.filter(function(item) {
+              return item.condition ===
+                conditionName;
+            }).length;
+
+          var expectedCount =
+            expectedConditionCounts[
+              assignedList
+            ][conditionName];
+
+          if (observedCount !== expectedCount) {
             throw new Error(
-              lexicalId +
-              " must have exactly two rows. Found " +
-              pair.length + "."
+              "List " + assignedList +
+              " should contain " + expectedCount +
+              " old " + conditionName +
+              " items. Found " + observedCount + "."
             );
           }
-
-          if (pair[0].word !== pair[1].word) {
-            throw new Error(
-              lexicalId +
-              " has inconsistent word values across its two rows."
-            );
-          }
-
-          var readings =
-            pair.map(function(item) {
-              return item.reading;
-            }).sort();
-
-          if (
-            readings[0] !== "high" ||
-            readings[1] !== "low"
-          ) {
-            throw new Error(
-              lexicalId +
-              " must contain one high and one low reading."
-            );
-          }
-
-          pair.forEach(function(item) {
-            var expectedStatus =
-              item.reading === "high"
-                ? "correct"
-                : "incorrect";
-
-            if (item.analysis_status !== expectedStatus) {
-              throw new Error(
-                item.item_id +
-                " should have analysis_status " +
-                expectedStatus + "."
-              );
-            }
-          });
         });
 
-        return itemsByLexicalId;
+        if (
+          oldFillers.some(function(item) {
+            return item.condition === "low_re";
+          })
+        ) {
+          throw new Error(
+            "The second-round lists must not contain low_re items."
+          );
+        }
+
+        return selectedStimuli;
       }
 
 
       /*
-       * Divide the 148 trials into four blocks of 37. The two readings of
-       * any lexical item are always assigned to different blocks. Block-pair
-       * assignments and trial order are randomized independently for every
-       * participant.
+       * Divide 141 or 142 selected trials into four near-equal blocks.
+       * Strata defined by round, condition, and analysis status are spread
+       * across blocks before trial order is randomized within each block.
        */
-      function divideIntoFourSecondRoundBlocks(
-        itemsByLexicalId
+      function divideIntoFourBalancedBlocks(
+        stimuli
       ) {
+        var baseSize =
+          Math.floor(stimuli.length / 4);
+
+        var remainder =
+          stimuli.length % 4;
+
+        var capacities = [0, 1, 2, 3]
+          .map(function(blockIndex) {
+            return (
+              baseSize +
+              (blockIndex < remainder ? 1 : 0)
+            );
+          });
+
         var blocks = [[], [], [], []];
-        var blockPairSchedule = [];
+        var stratumCounts = [{}, {}, {}, {}];
+        var strata = {};
 
-        function addBlockPair(
-          firstBlock,
-          secondBlock,
-          numberOfPairs
-        ) {
-          for (
-            var pairIndex = 0;
-            pairIndex < numberOfPairs;
-            pairIndex++
-          ) {
-            blockPairSchedule.push([
-              firstBlock,
-              secondBlock
-            ]);
+        stimuli.forEach(function(item) {
+          var stratumKey =
+            item.stimulus_round + "|" +
+            item.condition + "|" +
+            item.analysis_status;
+
+          if (!strata[stratumKey]) {
+            strata[stratumKey] = [];
           }
-        }
 
-        /*
-         * These six counts give every block exactly 37 trials:
-         * 13 pairs in block combinations 1–2 and 3–4;
-         * 12 pairs in each of the other four combinations.
-         */
-        addBlockPair(0, 1, 13);
-        addBlockPair(0, 2, 12);
-        addBlockPair(0, 3, 12);
-        addBlockPair(1, 2, 12);
-        addBlockPair(1, 3, 12);
-        addBlockPair(2, 3, 13);
+          strata[stratumKey].push(item);
+        });
 
-        blockPairSchedule =
+        var stratumKeys =
           jsPsych.randomization.shuffle(
-            blockPairSchedule
+            Object.keys(strata)
           );
 
-        var shuffledLexicalIds =
-          jsPsych.randomization.shuffle(
-            Object.keys(itemsByLexicalId)
-          );
+        stratumKeys.forEach(function(stratumKey) {
+          var stratumItems =
+            jsPsych.randomization.shuffle(
+              strata[stratumKey].slice()
+            );
 
-        shuffledLexicalIds.forEach(
-          function(lexicalId, lexicalIndex) {
-            var shuffledPair =
+          stratumItems.forEach(function(item) {
+            var candidates =
               jsPsych.randomization.shuffle(
-                itemsByLexicalId[lexicalId].slice()
+                [0, 1, 2, 3]
+              )
+              .filter(function(blockIndex) {
+                return (
+                  blocks[blockIndex].length <
+                  capacities[blockIndex]
+                );
+              });
+
+            candidates.sort(function(first, second) {
+              var firstStratumCount =
+                stratumCounts[first][stratumKey] || 0;
+              var secondStratumCount =
+                stratumCounts[second][stratumKey] || 0;
+
+              return (
+                firstStratumCount -
+                  secondStratumCount ||
+                blocks[first].length -
+                  blocks[second].length
               );
+            });
 
-            var assignedBlocks =
-              blockPairSchedule[lexicalIndex];
+            var selectedBlock = candidates[0];
 
-            blocks[assignedBlocks[0]].push(
-              shuffledPair[0]
-            );
-
-            blocks[assignedBlocks[1]].push(
-              shuffledPair[1]
-            );
-          }
-        );
+            blocks[selectedBlock].push(item);
+            stratumCounts[selectedBlock][stratumKey] =
+              (stratumCounts[selectedBlock][stratumKey] || 0) + 1;
+          });
+        });
 
         var overallOrder = 1;
 
         return blocks.map(
           function(blockItems, blockIndex) {
-            if (blockItems.length !== 37) {
+            if (
+              blockItems.length !==
+              capacities[blockIndex]
+            ) {
               throw new Error(
-                "Block " +
-                (blockIndex + 1) +
-                " should contain 37 trials, but contains " +
-                blockItems.length +
-                "."
+                "Block " + (blockIndex + 1) +
+                " should contain " +
+                capacities[blockIndex] +
+                " trials, but contains " +
+                blockItems.length + "."
               );
             }
 
@@ -1070,9 +1333,8 @@
               lexicalIdsInBlock.length
             ) {
               throw new Error(
-                "Block " +
-                (blockIndex + 1) +
-                " contains both readings of the same lexical item."
+                "Block " + (blockIndex + 1) +
+                " repeats a lexical item."
               );
             }
 
@@ -1083,7 +1345,7 @@
 
             return shuffledBlock.map(
               function(item, itemIndex) {
-                var itemWithOrder =
+                var orderedItem =
                   Object.assign(
                     {},
                     item,
@@ -1098,8 +1360,7 @@
                   );
 
                 overallOrder++;
-
-                return itemWithOrder;
+                return orderedItem;
               }
             );
           }
@@ -1746,14 +2007,15 @@
       var mainStimulusColumns =
         loadedMainStimuli.headers;
 
-      var mainStimuliByLexicalId =
-        validateSecondRoundStimuli(
-          mainStimuli
+      var selectedMainStimuli =
+        selectAndValidateExperimentalList(
+          mainStimuli,
+          experimentalList
         );
 
       var mainBlocks =
-        divideIntoFourSecondRoundBlocks(
-          mainStimuliByLexicalId
+        divideIntoFourBalancedBlocks(
+          selectedMainStimuli
         );
 
 
@@ -1809,7 +2071,8 @@
 
       /*
        * Preserve every spreadsheet column in the output.
-       * Additional columns can be added freely to main_stimuli_des_secondround.csv.
+       * Additional columns can be added freely to
+       * main_stimuli_des_secondround_counterbalanced.csv.
        */
       var mainStimulusDataFields = {};
 
@@ -1916,8 +2179,8 @@
 
 
       /*
-       * The 148 second-round trials are distributed into four 37-trial
-       * blocks. Trial order is randomized within each block.
+       * Each selected list contains 141 or 142 trials, distributed into
+       * four near-equal blocks. Trial order is randomized within each block.
        */
       for (
         var blockNumber = 1;
@@ -2833,7 +3096,7 @@
 
             <p>
               Confirme se os arquivos practice_stimuli.csv e
-              main_stimuli_des_secondround.csv estão na mesma pasta que
+              main_stimuli_des_secondround_counterbalanced.csv estão na mesma pasta que
               este arquivo HTML e se o experimento está sendo aberto
               por meio de um servidor.
             </p>
