@@ -248,8 +248,9 @@
 
     /*
      * Keep both CSV files in the same folder as this HTML file.
-     * The main file contains all four counterbalanced versions. Start the
-     * experiment with ?version=1, ?version=2, ?version=3, or ?version=4.
+     * The main file contains all four counterbalanced versions. An explicit
+     * ?version=1, ?version=2, ?version=3, or ?version=4 overrides automatic
+     * version assignment.
      */
     var MAIN_STIMULI_FILE = "main_stimuli.csv";
     var PRACTICE_STIMULI_FILE = "practice_stimuli.csv";
@@ -265,22 +266,126 @@
       LOCAL_HOSTNAMES.includes(window.location.hostname);
     var RUN_MODE = IS_LOCAL_RUN ? "local" : "online_datapipe";
 
-    var versionParameter =
-      new URLSearchParams(window.location.search).get("version");
+    var urlParameters =
+      new URLSearchParams(window.location.search);
     var selectedVersion;
+    var versionAssignmentMethod;
 
-    if (versionParameter === null && IS_LOCAL_RUN) {
-      selectedVersion = 1;
-      console.warn(
-        "Nenhum parâmetro de versão foi informado. O teste local usará a versão 1."
+    async function resolveExperimentalVersion() {
+      var requestedVersion =
+        urlParameters.get("version");
+
+      if (requestedVersion !== null) {
+        var parsedVersion = Number(requestedVersion);
+
+        if (
+          !Number.isInteger(parsedVersion) ||
+          parsedVersion < 1 ||
+          parsedVersion > 4
+        ) {
+          throw new Error(
+            'O parâmetro "version" da URL deve ser 1, 2, 3 ou 4.'
+          );
+        }
+
+        return {
+          version: parsedVersion,
+          assignment_method: "url_parameter"
+        };
+      }
+
+      if (IS_LOCAL_RUN) {
+        return {
+          version: (Number(participantId) % 4) + 1,
+          assignment_method:
+            "local_internal_participant_id_modulo"
+        };
+      }
+
+      var storageKey =
+        "continuous_lexical_decision_counterbalance_version";
+
+      try {
+        var cachedVersion = Number(
+          window.sessionStorage.getItem(storageKey)
+        );
+
+        if (
+          Number.isInteger(cachedVersion) &&
+          cachedVersion >= 1 &&
+          cachedVersion <= 4
+        ) {
+          return {
+            version: cachedVersion,
+            assignment_method:
+              "datapipe_sequential_cached"
+          };
+        }
+      } catch (error) {
+        // Continue to DataPipe assignment if sessionStorage is unavailable.
+      }
+
+      var response = await fetch(
+        "https://pipe.jspsych.org/api/condition/",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            experimentID: DATAPIPE_EXPERIMENT_ID
+          })
+        }
       );
-    } else if (!["1", "2", "3", "4"].includes(versionParameter)) {
-      throw new Error(
-        "A URL do experimento deve especificar a versão 1, 2, 3 ou 4. " +
-        "Por exemplo: ?version=1"
-      );
-    } else {
-      selectedVersion = Number(versionParameter);
+
+      var payload = {};
+
+      try {
+        payload = await response.json();
+      } catch (error) {
+        throw new Error(
+          "O DataPipe retornou uma resposta ilegível para a atribuição de versão."
+        );
+      }
+
+      if (!response.ok) {
+        throw new Error(
+          "Não foi possível obter uma versão experimental do DataPipe. " +
+          (payload.message || "Erro desconhecido do DataPipe.") +
+          " Confirme que a atribuição de condições está ativada e " +
+          "configurada para quatro condições no painel do experimento."
+        );
+      }
+
+      var conditionNumber = Number(payload.condition);
+
+      if (
+        !Number.isInteger(conditionNumber) ||
+        conditionNumber < 0 ||
+        conditionNumber > 3
+      ) {
+        throw new Error(
+          "O DataPipe retornou a condição " +
+          String(payload.condition) +
+          ". Este experimento requer exatamente quatro condições (0–3)."
+        );
+      }
+
+      var assignedVersion = conditionNumber + 1;
+
+      try {
+        window.sessionStorage.setItem(
+          storageKey,
+          String(assignedVersion)
+        );
+      } catch (error) {
+        // Assignment still works if sessionStorage is unavailable.
+      }
+
+      return {
+        version: assignedVersion,
+        assignment_method: "datapipe_sequential"
+      };
     }
 
     if (window.location.protocol === "file:") {
@@ -328,6 +433,13 @@
     }
 
     var participantId = generateRandomEightDigitId();
+    var versionAssignment =
+      await resolveExperimentalVersion();
+
+    selectedVersion = versionAssignment.version;
+    versionAssignmentMethod =
+      versionAssignment.assignment_method;
+
     var randomizationSeed = hashStringToUint32(
       participantId + "|version=" + selectedVersion
     );
@@ -349,6 +461,7 @@
     jsPsych.data.addProperties({
       participant_id: participantId,
       experimental_version: selectedVersion,
+      version_assignment_method: versionAssignmentMethod,
       randomization_seed: randomizationSeed,
       run_mode: RUN_MODE,
       session_timestamp_utc: sessionTimestamp,
