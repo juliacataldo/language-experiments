@@ -15,6 +15,7 @@
 
     <!-- Plugins used throughout this experiment -->
     <script src="jspsych/plugin-html-keyboard-response.js"></script>
+    <script src="https://unpkg.com/@jspsych/plugin-browser-check@2.1.0"></script>
 
     <!--
       jspsych-psychophysics v5.1.0: compatible with jsPsych 8.2.x.
@@ -1211,6 +1212,40 @@
     }
 
     // ================================================================
+    // 2B. PHYSICAL KEYBOARD REQUIREMENT
+    // ================================================================
+
+    var browser_check = {
+      type: jsPsychBrowserCheck,
+      features: ["mobile"],
+      inclusion_function: function(data) {
+        return data.mobile === false;
+      },
+      exclusion_message: function() {
+        return `
+          <div class="text-screen">
+            <h1>Dispositivo incompatível</h1>
+
+            <p>
+              Este experimento deve ser realizado em um computador desktop
+              ou laptop com teclado físico.
+            </p>
+
+            <p>
+              Por favor, retorne ao Prolific e abra o estudo em um computador.
+            </p>
+          </div>
+        `;
+      },
+      data: {
+        task: "browser_check"
+      }
+    };
+
+    timeline.push(browser_check);
+
+
+    // ================================================================
     // 3. CONSENT SCREEN
     // ================================================================
 
@@ -1356,6 +1391,11 @@
       stimulus: `
         <div class="text-screen">
           <h1>Instruções</h1>
+
+          <p>
+            Este experimento deve ser realizado em um computador desktop ou
+            laptop com teclado físico.
+          </p>
 
           <p>
             Neste experimento, você será apresentado a várias palavras, uma
@@ -2601,6 +2641,22 @@
               formData.get(fieldName) || "";
           });
 
+          var interactionData =
+            jsPsych.data.getInteractionData().values();
+
+          trialData.browser_interactions_json =
+            JSON.stringify(interactionData);
+
+          trialData.blur_count =
+            interactionData.filter(function(interactionEvent) {
+              return interactionEvent.type === "blur";
+            }).length;
+
+          trialData.focus_count =
+            interactionData.filter(function(interactionEvent) {
+              return interactionEvent.type === "focus";
+            }).length;
+
           jsPsych.finishTrial(
             trialData
           );
@@ -2719,7 +2775,10 @@
           '<p style="font-size: 24px;">' +
           'Dados salvos com sucesso.' +
           '</p>' +
-          '<p>Clique neste link para ser redirecionado de volta ao Prolific: https://app.prolific.com/submissions/complete?cc=C1EU7F4Z. Em seguida, você pode fechar essa janela.</p>',
+          '<p>Clique neste link para ser redirecionado de volta ao Prolific: ' +
+          '<a href="https://app.prolific.com/submissions/complete?cc=C1EU7F4Z">' +
+          'https://app.prolific.com/submissions/complete?cc=C1EU7F4Z' +
+          '</a>. Em seguida, você pode fechar essa janela.</p>',
         choices: "NO_KEYS",
         data: {
           task: "online_save_confirmation"
