@@ -2649,12 +2649,12 @@
 
           trialData.blur_count =
             interactionData.filter(function(interactionEvent) {
-              return interactionEvent.type === "blur";
+              return interactionEvent.event === "blur";
             }).length;
 
           trialData.focus_count =
             interactionData.filter(function(interactionEvent) {
-              return interactionEvent.type === "focus";
+              return interactionEvent.event === "focus";
             }).length;
 
           jsPsych.finishTrial(
