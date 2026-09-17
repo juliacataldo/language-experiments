@@ -1,0 +1,9 @@
+﻿stimulus_id,stimulus,lexicality,correct_answer,feedback
+practice_01,humanidade,word,j,Humanidade' é uma palavra do português. A resposta correta é J.
+practice_02,transferível,word,j,Transferível' é uma palavra do português. A resposta correta é J.
+practice_03,descarumbo,nonword,f,"Apesar de 'des' ser uma sequência de letras comum no português, 'carumbo' não existe/não possui nenhum significado.  A resposta correta é F."
+practice_04,visidável,nonword,f,"Apesar de -ável ser uma sequência de letras comum no português, 'visidar' não existe/não possui nenhum significado. A resposta correta é F."
+practice_05,fazível,word,j,"Apesar de 'fazível' não ser considerada por todos como uma palavra do português, qualquer falante que ouça essa palavra, a entende. Todos conhecem o verbo 'fazer' e entendem que 'fazível' é algo que pode ser feito. A resposta correta é J."
+practice_06,imprigofável,nonword,f,"Apesar de as sequências de letras 'im-' e '-ável' serem comuns no português, 'prigofar' não existe/não possui nenhum significado. A resposta correta é F."
+practice_07,redirecionamento,word,j,Redirecionamento' é uma palavra do português. A resposta correta é J.
+practice_08,enlancomado,nonword,f,"Apesar de as sequências de letras 'en-' e '-ado' serem comuns no português, 'lacomar' não é uma palavra/não possui nenhum significado na nossa língua. A resposta correta é F."

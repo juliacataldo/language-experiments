@@ -1,10 +1,10 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="pt-BR">
   <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-    <title>Continuous Lexical Decision Experiment</title>
+    <title>Experimento de Decisão Lexical Contínua</title>
 
     <!-- jsPsych core files -->
     <script src="jspsych/jspsych.js"></script>
@@ -55,8 +55,7 @@
         padding-left: 1.5em;
       }
 
-      .text-screen h1,
-      .text-screen h2 {
+      .text-screen h1 {
         text-align: center;
       }
 
@@ -72,11 +71,7 @@
        * CSS classes.
        */
 
-      .feedback-correct {
-        font-size: 32px;
-        font-weight: bold;
-      }
-
+      .feedback-correct,
       .feedback-incorrect {
         font-size: 32px;
         font-weight: bold;
@@ -225,24 +220,22 @@
     /*
      * Continuous lexical-decision timing.
      *
-     * Every spreadsheet row is one prime-target pair. Both the prime and the
-     * target become ordinary lexical-decision trials, so the participant must
-     * press F or J for every displayed letter string.
+     * Every spreadsheet row is one displayed lexical-decision trial. Word
+     * prime-target rows share a unit_id and remain adjacent; nonwords are
+     * independent one-row units. The participant presses F or J for every
+     * displayed letter string.
      *
      * Trial sequence:
-     *   fixation: 500 ms
+     *   fixation: 200 ms
      *   blank:    200 ms
-     *   stimulus: 550 ms (responses remain possible after it disappears)
-     *   response deadline: 2000 ms from stimulus onset
-     *   post-response interval: randomly 650, 700, or 750 ms
+     *   stimulus: remains visible until response
+     *   response timeout: none
+     *   post-response interval: randomly 300, 350, or 400 ms
      */
-    var FIXATION_DURATION_MS = 500;
+    var FIXATION_DURATION_MS = 300;
     var PRE_STIMULUS_BLANK_MS = 200;
-    var STIMULUS_DURATION_MS = 550;
-    var RESPONSE_DEADLINE_MS = 2000;
-    var ITI_OPTIONS_MS = [650, 700, 750];
-    var FEEDBACK_DURATION_MS = 750;
-    var PRACTICE_PASS_THRESHOLD = 0.80;
+    var ITI_OPTIONS_MS = [300, 350, 400];
+    var PRACTICE_PASS_THRESHOLD = 0.70;
 
     var STIMULUS_ONSET_MS =
       FIXATION_DURATION_MS + PRE_STIMULUS_BLANK_MS;
@@ -254,10 +247,12 @@
     var CONSENT_PDF_FILE = "consent.pdf";
 
     /*
-     * Keep main_stimuli_continuous.csv in the same folder as this HTML file.
-     * Each row of that CSV must describe one complete prime-target pair.
+     * Keep both CSV files in the same folder as this HTML file.
+     * The main file contains all four counterbalanced versions. Start the
+     * experiment with ?version=1, ?version=2, ?version=3, or ?version=4.
      */
-    var MAIN_STIMULI_FILE = "main_stimuli_continuous.csv";
+    var MAIN_STIMULI_FILE = "main_stimuli.csv";
+    var PRACTICE_STIMULI_FILE = "practice_stimuli.csv";
     var DATAPIPE_EXPERIMENT_ID = "0Zb0XHTy8RcV";
 
     /*
@@ -270,11 +265,30 @@
       LOCAL_HOSTNAMES.includes(window.location.hostname);
     var RUN_MODE = IS_LOCAL_RUN ? "local" : "online_datapipe";
 
+    var versionParameter =
+      new URLSearchParams(window.location.search).get("version");
+    var selectedVersion;
+
+    if (versionParameter === null && IS_LOCAL_RUN) {
+      selectedVersion = 1;
+      console.warn(
+        "Nenhum parâmetro de versão foi informado. O teste local usará a versão 1."
+      );
+    } else if (!["1", "2", "3", "4"].includes(versionParameter)) {
+      throw new Error(
+        "A URL do experimento deve especificar a versão 1, 2, 3 ou 4. " +
+        "Por exemplo: ?version=1"
+      );
+    } else {
+      selectedVersion = Number(versionParameter);
+    }
+
     if (window.location.protocol === "file:") {
       throw new Error(
-        "This version loads its stimuli from " + MAIN_STIMULI_FILE + ". " +
-        "Please run it through the Python server at " +
-        "http://localhost:8000/ rather than double-clicking the HTML file."
+        "Esta versão carrega os estímulos dos arquivos " +
+        MAIN_STIMULI_FILE + " e " + PRACTICE_STIMULI_FILE + ". " +
+        "Execute o experimento por meio do servidor Python em " +
+        "http://localhost:8000/, em vez de abrir o arquivo HTML com dois cliques."
       );
     }
 
@@ -284,16 +298,16 @@
         "PASTE_YOUR_DATAPIPE_EXPERIMENT_ID_HERE"
     ) {
       throw new Error(
-        "Online saving is not configured yet. Replace " +
-        "PASTE_YOUR_DATAPIPE_EXPERIMENT_ID_HERE with the Experiment ID " +
-        "shown in your DataPipe experiment dashboard."
+        "O salvamento on-line ainda não está configurado. Substitua " +
+        "PASTE_YOUR_DATAPIPE_EXPERIMENT_ID_HERE pelo ID do experimento " +
+        "exibido no painel do DataPipe."
       );
     }
 
     var jsPsych = initJsPsych({
       show_progress_bar: true,
       auto_update_progress_bar: false,
-      message_progress_bar: "Experiment progress"
+      message_progress_bar: "Progresso do experimento"
     });
 
     var timeline = [];
@@ -314,6 +328,10 @@
     }
 
     var participantId = generateRandomEightDigitId();
+    var randomizationSeed = hashStringToUint32(
+      participantId + "|version=" + selectedVersion
+    );
+    var experimentRandom = mulberry32(randomizationSeed);
 
     var sessionTimestamp = new Date()
       .toISOString()
@@ -323,15 +341,20 @@
     var dataFileStem =
       "continuous_lexical_decision_" +
       participantId +
+      "_v" +
+      selectedVersion +
       "_" +
       sessionTimestamp;
 
     jsPsych.data.addProperties({
       participant_id: participantId,
+      experimental_version: selectedVersion,
+      randomization_seed: randomizationSeed,
       run_mode: RUN_MODE,
       session_timestamp_utc: sessionTimestamp,
-      experiment_paradigm: "continuous_lexical_decision",
-      prime_target_lag_trials: 1
+      main_stimuli_file: MAIN_STIMULI_FILE,
+      practice_stimuli_file: PRACTICE_STIMULI_FILE,
+      experiment_paradigm: "continuous_lexical_decision"
     });
 
 
@@ -351,9 +374,9 @@
         startX: 0,
         startY: 0,
         origin_center: true,
-        fontSize: fontSize || "48px",
+        fontSize: fontSize || "40px",
         fontFamily: "Courier New, Courier, monospace",
-        fontWeight: "bold",
+        fontWeight: "normal",
         text_color: "#ffffff",
         show_start_time: showStartTime
       };
@@ -378,10 +401,53 @@
       return numberCorrect / total;
     }
 
+    function escapeHtml(value) {
+      return String(value)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+    }
+
+    function hashStringToUint32(text) {
+      var hash = 2166136261;
+
+      for (var index = 0; index < text.length; index++) {
+        hash ^= text.charCodeAt(index);
+        hash = Math.imul(hash, 16777619);
+      }
+
+      return hash >>> 0;
+    }
+
+    function mulberry32(seed) {
+      return function() {
+        var value = seed += 0x6D2B79F5;
+        value = Math.imul(value ^ (value >>> 15), value | 1);
+        value ^= value + Math.imul(value ^ (value >>> 7), value | 61);
+        return ((value ^ (value >>> 14)) >>> 0) / 4294967296;
+      };
+    }
+
     function chooseRandomValue(values) {
       return values[
-        Math.floor(Math.random() * values.length)
+        Math.floor(experimentRandom() * values.length)
       ];
+    }
+
+    function shuffleArray(values) {
+      var shuffled = values.slice();
+
+      for (var index = shuffled.length - 1; index > 0; index--) {
+        var randomIndex =
+          Math.floor(experimentRandom() * (index + 1));
+        var temporaryValue = shuffled[index];
+        shuffled[index] = shuffled[randomIndex];
+        shuffled[randomIndex] = temporaryValue;
+      }
+
+      return shuffled;
     }
 
     /*
@@ -438,13 +504,105 @@
       return rows;
     }
 
-    async function loadMainPairs(filename) {
+    async function loadPracticeStimuli(filename) {
       var response = await fetch(filename, { cache: "no-store" });
 
       if (!response.ok) {
         throw new Error(
-          "Could not load " + filename +
-          ". The server returned HTTP " + response.status + "."
+          "Não foi possível carregar " + filename +
+          ". O servidor retornou o código HTTP " + response.status + "."
+        );
+      }
+
+      var parsedRows = parseCSV(await response.text());
+
+      if (parsedRows.length !== 9) {
+        throw new Error(
+          filename +
+          " deve conter uma linha de cabeçalho e exatamente oito tentativas de prática."
+        );
+      }
+
+      var headers = parsedRows[0].map(function(header) {
+        return header.replace(/^\uFEFF/, "").trim();
+      });
+      var requiredColumns = [
+        "stimulus_id",
+        "stimulus",
+        "lexicality",
+        "feedback"
+      ];
+
+      requiredColumns.forEach(function(columnName) {
+        if (!headers.includes(columnName)) {
+          throw new Error(
+            filename + " não contém a coluna obrigatória \"" +
+            columnName + "\"."
+          );
+        }
+      });
+
+      var practiceRows = parsedRows.slice(1).map(
+        function(values, rowIndex) {
+          var practiceRow = {};
+
+          headers.forEach(function(header, columnIndex) {
+            practiceRow[header] =
+              String(values[columnIndex] || "").trim();
+          });
+
+          practiceRow.lexicality =
+            practiceRow.lexicality.toLowerCase();
+
+          requiredColumns.forEach(function(columnName) {
+            if (!practiceRow[columnName]) {
+              throw new Error(
+                "A linha " + (rowIndex + 2) + " do CSV de prática " +
+                "tem um valor em branco na coluna \"" + columnName + "\"."
+              );
+            }
+          });
+
+          if (!["word", "nonword"].includes(practiceRow.lexicality)) {
+            throw new Error(
+              "A linha " + (rowIndex + 2) + " do CSV de prática " +
+              "tem um valor inválido de lexicality."
+            );
+          }
+
+          return Object.assign({}, practiceRow, {
+            unit_id: practiceRow.stimulus_id,
+            unit_type: "practice_singleton",
+            within_unit_position: 1,
+            pair_cell: "practice",
+            pair_role: "practice",
+            correct_response:
+              practiceRow.lexicality === "word" ? "j" : "f",
+            condition: "practice"
+          });
+        }
+      );
+
+      var practiceIds = practiceRows.map(function(practiceRow) {
+        return practiceRow.stimulus_id;
+      });
+
+      if (new Set(practiceIds).size !== practiceIds.length) {
+        throw new Error(
+          filename + " contém valores duplicados de stimulus_id."
+        );
+      }
+
+      return practiceRows;
+    }
+
+    async function loadExperimentInput(filename, requestedVersion) {
+      var response = await fetch(filename, { cache: "no-store" });
+
+      if (!response.ok) {
+        throw new Error(
+          "Não foi possível carregar " + filename +
+          ". O servidor retornou o código HTTP " + response.status + "."
         );
       }
 
@@ -453,7 +611,8 @@
 
       if (parsedRows.length < 2) {
         throw new Error(
-          filename + " must contain a header row and at least one pair."
+          filename +
+          " deve conter uma linha de cabeçalho e linhas de estímulos."
         );
       }
 
@@ -463,197 +622,476 @@
 
       if (headers.some(function(header) { return header === ""; })) {
         throw new Error(
-          filename + " contains a blank column name in its first row."
+          filename +
+          " contém um nome de coluna em branco na primeira linha."
         );
       }
 
       if (new Set(headers).size !== headers.length) {
         throw new Error(
-          filename + " contains duplicate column names."
+          filename + " contém nomes de colunas duplicados."
         );
       }
 
       var requiredColumns = [
-        "pair_id",
+        "version",
+        "block",
+        "unit_id",
+        "unit_type",
+        "within_unit_position",
+        "pair_cell",
+        "pair_role",
+        "stimulus_id",
+        "stimulus",
+        "lexicality",
         "condition",
-        "prime_item_id",
-        "prime",
-        "prime_lexicality",
-        "prime_correct_response",
-        "target_item_id",
-        "target",
-        "target_lexicality",
-        "target_correct_response"
+        "prime_condition",
+        "target_condition",
+        "zipf_scale"
       ];
 
       requiredColumns.forEach(function(columnName) {
         if (!headers.includes(columnName)) {
           throw new Error(
-            filename + " is missing the required column \"" +
+            filename + " não contém a coluna obrigatória \"" +
             columnName + "\"."
           );
         }
       });
 
-      var pairs = parsedRows.slice(1).map(function(values, rowIndex) {
-        var pair = {};
+      var rows = parsedRows.slice(1).map(function(values, rowIndex) {
+        var stimulusRow = {};
 
         headers.forEach(function(header, columnIndex) {
-          pair[header] = String(values[columnIndex] || "").trim();
+          stimulusRow[header] =
+            String(values[columnIndex] || "").trim();
         });
 
-        pair.prime_lexicality = pair.prime_lexicality.toLowerCase();
-        pair.target_lexicality = pair.target_lexicality.toLowerCase();
-        pair.prime_correct_response =
-          pair.prime_correct_response.toLowerCase();
-        pair.target_correct_response =
-          pair.target_correct_response.toLowerCase();
+        stimulusRow.version = Number(stimulusRow.version);
+        stimulusRow.block = Number(stimulusRow.block);
+        stimulusRow.within_unit_position =
+          Number(stimulusRow.within_unit_position);
+        stimulusRow.unit_type =
+          stimulusRow.unit_type.toLowerCase();
+        stimulusRow.pair_role =
+          stimulusRow.pair_role.toLowerCase();
+        stimulusRow.lexicality =
+          stimulusRow.lexicality.toLowerCase();
 
         [
-          "pair_id",
+          "unit_id",
+          "unit_type",
+          "pair_cell",
+          "pair_role",
+          "stimulus_id",
+          "stimulus",
           "condition",
-          "prime_item_id",
-          "prime",
-          "target_item_id",
-          "target"
+          "lexicality"
         ].forEach(function(columnName) {
-          if (!pair[columnName]) {
+          if (!stimulusRow[columnName]) {
             throw new Error(
-              "CSV row " + (rowIndex + 2) +
-              " has a blank value in \"" + columnName + "\"."
+              "A linha " + (rowIndex + 2) + " do CSV tem um valor " +
+              "em branco na coluna \"" + columnName + "\"."
             );
           }
         });
 
-        ["prime_lexicality", "target_lexicality"].forEach(
-          function(columnName) {
-            if (!['word', 'nonword'].includes(pair[columnName])) {
-              throw new Error(
-                "CSV row " + (rowIndex + 2) +
-                " has " + columnName + " \"" + pair[columnName] +
-                "\". Use word or nonword."
-              );
-            }
-          }
-        );
+        if (![1, 2, 3, 4].includes(stimulusRow.version)) {
+          throw new Error(
+            "A linha " + (rowIndex + 2) +
+            " do CSV tem uma versão inválida."
+          );
+        }
 
-        ["prime_correct_response", "target_correct_response"].forEach(
-          function(columnName) {
-            if (!["f", "j"].includes(pair[columnName])) {
-              throw new Error(
-                "CSV row " + (rowIndex + 2) +
-                " has " + columnName + " \"" + pair[columnName] +
-                "\". Use f or j."
-              );
-            }
-          }
-        );
+        if (![1, 2, 3].includes(stimulusRow.block)) {
+          throw new Error(
+            "A linha " + (rowIndex + 2) +
+            " do CSV tem um bloco inválido."
+          );
+        }
 
-        return pair;
+        if (![1, 2].includes(stimulusRow.within_unit_position)) {
+          throw new Error(
+            "A linha " + (rowIndex + 2) +
+            " do CSV tem um within_unit_position inválido."
+          );
+        }
+
+        if (
+          !["prime_target_pair", "nonword_singleton"].includes(
+            stimulusRow.unit_type
+          )
+        ) {
+          throw new Error(
+            "A linha " + (rowIndex + 2) +
+            " do CSV tem um unit_type inválido."
+          );
+        }
+
+        if (!["prime", "target", "nonword"].includes(stimulusRow.pair_role)) {
+          throw new Error(
+            "A linha " + (rowIndex + 2) +
+            " do CSV tem um pair_role inválido."
+          );
+        }
+
+        if (!["word", "nonword"].includes(stimulusRow.lexicality)) {
+          throw new Error(
+            "A linha " + (rowIndex + 2) +
+            " do CSV tem um valor inválido de lexicality."
+          );
+        }
+
+        if (stimulusRow.zipf_scale === "") {
+          stimulusRow.zipf_scale = null;
+        } else {
+          stimulusRow.zipf_scale = Number(stimulusRow.zipf_scale);
+
+          if (!Number.isFinite(stimulusRow.zipf_scale)) {
+            throw new Error(
+              "A linha " + (rowIndex + 2) +
+              " do CSV tem um zipf_scale não numérico."
+            );
+          }
+        }
+
+        stimulusRow.correct_response =
+          stimulusRow.lexicality === "word" ? "j" : "f";
+
+        return stimulusRow;
       });
 
-      var pairIds = pairs.map(function(pair) { return pair.pair_id; });
-      if (new Set(pairIds).size !== pairIds.length) {
+      var selectedRows = rows.filter(function(stimulusRow) {
+        return stimulusRow.version === requestedVersion;
+      });
+
+      if (selectedRows.length !== 180) {
         throw new Error(
-          filename + " contains duplicate pair_id values."
+          "A versão " + requestedVersion +
+          " deve conter exatamente 180 tentativas. Foram encontradas " +
+          selectedRows.length + "."
         );
       }
 
-      var itemIds = [];
-      pairs.forEach(function(pair) {
-        itemIds.push(pair.prime_item_id, pair.target_item_id);
+      var stimulusIds = selectedRows.map(function(stimulusRow) {
+        return stimulusRow.stimulus_id;
       });
 
-      if (new Set(itemIds).size !== itemIds.length) {
+      if (new Set(stimulusIds).size !== stimulusIds.length) {
         throw new Error(
-          filename + " contains duplicate prime_item_id or target_item_id values."
+          "A versão " + requestedVersion +
+          " contém valores duplicados de stimulus_id."
         );
       }
+
+      validateSelectedVersion(selectedRows, requestedVersion);
 
       return {
         headers: headers,
-        pairs: pairs
+        rows: selectedRows
       };
     }
 
-    /*
-     * Shuffle complete prime-target pairs and divide the pairs into four
-     * blocks. Prime and target are never separated or independently shuffled.
-     */
-    function dividePairsIntoFourBlocks(pairs) {
-      if (pairs.length < 4) {
+    function groupRowsByUnit(rows) {
+      var unitMap = new Map();
+
+      rows.forEach(function(stimulusRow) {
+        if (!unitMap.has(stimulusRow.unit_id)) {
+          unitMap.set(stimulusRow.unit_id, []);
+        }
+
+        unitMap.get(stimulusRow.unit_id).push(stimulusRow);
+      });
+
+      return Array.from(unitMap.values());
+    }
+
+    function validateSelectedVersion(rows, requestedVersion) {
+      var expectedPairCells = [
+        "high_in__high_des",
+        "low_re__high_des",
+        "high_in__low_des",
+        "low_re__low_des"
+      ];
+
+      var wordCount = rows.filter(function(stimulusRow) {
+        return stimulusRow.lexicality === "word";
+      }).length;
+      var nonwordCount = rows.filter(function(stimulusRow) {
+        return stimulusRow.lexicality === "nonword";
+      }).length;
+
+      if (wordCount !== 120 || nonwordCount !== 60) {
         throw new Error(
-          "The main spreadsheet must contain at least four prime-target pairs."
+          "A versão " + requestedVersion +
+          " deve conter 120 tentativas com palavras e 60 com não palavras."
         );
       }
 
-      var shuffledPairs =
-        jsPsych.randomization.shuffle(pairs.slice());
+      [1, 2, 3].forEach(function(blockNumber) {
+        var blockRows = rows.filter(function(stimulusRow) {
+          return stimulusRow.block === blockNumber;
+        });
+        var units = groupRowsByUnit(blockRows);
+        var pairUnits = units.filter(function(unit) {
+          return unit[0].unit_type === "prime_target_pair";
+        });
+        var nonwordUnits = units.filter(function(unit) {
+          return unit[0].unit_type === "nonword_singleton";
+        });
 
-      var blocks = [[], [], [], []];
-      var baseBlockSize = Math.floor(shuffledPairs.length / 4);
-      var remainder = shuffledPairs.length % 4;
-      var pairIndex = 0;
-      var overallPairOrder = 1;
+        if (
+          blockRows.length !== 60 ||
+          units.length !== 40 ||
+          pairUnits.length !== 20 ||
+          nonwordUnits.length !== 20
+        ) {
+          throw new Error(
+            "A versão " + requestedVersion + ", bloco " + blockNumber +
+            ", deve ter 60 tentativas em 40 unidades: 20 pares de " +
+            "palavras e 20 não palavras independentes."
+          );
+        }
+
+        pairUnits.forEach(function(unit) {
+          unit.sort(function(first, second) {
+            return first.within_unit_position -
+              second.within_unit_position;
+          });
+
+          var prime = unit[0];
+          var target = unit[1];
+          var expectedCell =
+            prime.prime_condition + "__" + prime.target_condition;
+
+          if (
+            unit.length !== 2 ||
+            prime.pair_role !== "prime" ||
+            target.pair_role !== "target" ||
+            prime.within_unit_position !== 1 ||
+            target.within_unit_position !== 2 ||
+            prime.lexicality !== "word" ||
+            target.lexicality !== "word" ||
+            prime.condition !== prime.prime_condition ||
+            target.condition !== target.target_condition ||
+            target.prime_condition !== prime.prime_condition ||
+            target.target_condition !== prime.target_condition ||
+            prime.pair_cell !== expectedCell ||
+            target.pair_cell !== expectedCell
+          ) {
+            throw new Error(
+              "Estrutura prime-alvo inválida na unidade " +
+              prime.unit_id + "."
+            );
+          }
+        });
+
+        nonwordUnits.forEach(function(unit) {
+          var nonword = unit[0];
+
+          if (
+            unit.length !== 1 ||
+            nonword.pair_role !== "nonword" ||
+            nonword.within_unit_position !== 1 ||
+            nonword.lexicality !== "nonword" ||
+            nonword.pair_cell !== "nonword"
+          ) {
+            throw new Error(
+              "Estrutura de não palavra independente inválida na unidade " +
+              nonword.unit_id + "."
+            );
+          }
+        });
+
+        expectedPairCells.forEach(function(pairCell) {
+          var cellCount = pairUnits.filter(function(unit) {
+            return unit[0].pair_cell === pairCell;
+          }).length;
+
+          if (cellCount !== 5) {
+            throw new Error(
+              "A versão " + requestedVersion + ", bloco " + blockNumber +
+              ", deve conter cinco unidades em " + pairCell + "."
+            );
+          }
+        });
+
+        [
+          ["nonword_des", 10],
+          ["nonword_re", 5],
+          ["nonword_in_im", 5]
+        ].forEach(function(expectedCondition) {
+          var conditionCount = nonwordUnits.filter(function(unit) {
+            return unit[0].condition === expectedCondition[0];
+          }).length;
+
+          if (conditionCount !== expectedCondition[1]) {
+            throw new Error(
+              "A versão " + requestedVersion + ", bloco " + blockNumber +
+              ", tem uma contagem inesperada para " +
+              expectedCondition[0] + "."
+            );
+          }
+        });
+      });
+    }
+
+    function unitCategory(unit) {
+      return unit[0].unit_type === "prime_target_pair"
+        ? "pair"
+        : "nonword";
+    }
+
+    function respectsUnitRunLimit(units, maximumRunLength) {
+      var previousCategory = "";
+      var runLength = 0;
+
+      for (var index = 0; index < units.length; index++) {
+        var category = unitCategory(units[index]);
+
+        if (category === previousCategory) {
+          runLength++;
+        } else {
+          previousCategory = category;
+          runLength = 1;
+        }
+
+        if (runLength > maximumRunLength) {
+          return false;
+        }
+      }
+
+      return true;
+    }
+
+    function shuffleUnitsWithRunLimit(units) {
+      for (var attempt = 0; attempt < 1000; attempt++) {
+        var pairUnits = shuffleArray(
+          units.filter(function(unit) {
+            return unitCategory(unit) === "pair";
+          })
+        );
+        var nonwordUnits = shuffleArray(
+          units.filter(function(unit) {
+            return unitCategory(unit) === "nonword";
+          })
+        );
+        var randomizedUnits = [];
+        var previousCategory = "";
+        var runLength = 0;
+
+        while (pairUnits.length > 0 || nonwordUnits.length > 0) {
+          var availableCategories = [];
+
+          if (
+            pairUnits.length > 0 &&
+            !(previousCategory === "pair" && runLength === 2)
+          ) {
+            availableCategories.push("pair");
+          }
+
+          if (
+            nonwordUnits.length > 0 &&
+            !(previousCategory === "nonword" && runLength === 2)
+          ) {
+            availableCategories.push("nonword");
+          }
+
+          if (availableCategories.length === 0) {
+            break;
+          }
+
+          var chosenCategory;
+
+          if (availableCategories.length === 1) {
+            chosenCategory = availableCategories[0];
+          } else {
+            var pairProbability =
+              pairUnits.length /
+              (pairUnits.length + nonwordUnits.length);
+            chosenCategory =
+              experimentRandom() < pairProbability
+                ? "pair"
+                : "nonword";
+          }
+
+          randomizedUnits.push(
+            chosenCategory === "pair"
+              ? pairUnits.pop()
+              : nonwordUnits.pop()
+          );
+
+          if (chosenCategory === previousCategory) {
+            runLength++;
+          } else {
+            previousCategory = chosenCategory;
+            runLength = 1;
+          }
+        }
+
+        if (
+          randomizedUnits.length === units.length &&
+          respectsUnitRunLimit(randomizedUnits, 2)
+        ) {
+          return randomizedUnits;
+        }
+      }
+
+      throw new Error(
+        "Não foi possível criar uma ordem aleatória válida para as unidades."
+      );
+    }
+
+    /*
+     * Block membership and word-pair composition come from the spreadsheet.
+     * Only whole units are shuffled. A word pair is expanded after shuffling,
+     * so its prime always remains immediately before its target. Nonwords are
+     * one-row units and are never treated as pairs.
+     */
+    function buildRandomizedBlocks(rows) {
+      var blocks = [[], [], []];
+      var overallUnitOrder = 1;
       var overallTrialOrder = 1;
 
-      for (var blockIndex = 0; blockIndex < 4; blockIndex++) {
-        var thisBlockSize =
-          baseBlockSize + (blockIndex < remainder ? 1 : 0);
+      for (var blockNumber = 1; blockNumber <= 3; blockNumber++) {
+        var blockRows = rows.filter(function(stimulusRow) {
+          return stimulusRow.block === blockNumber;
+        });
+        var randomizedUnits =
+          shuffleUnitsWithRunLimit(groupRowsByUnit(blockRows));
         var blockTrialNumber = 1;
 
-        for (
-          var blockPairPosition = 1;
-          blockPairPosition <= thisBlockSize;
-          blockPairPosition++
-        ) {
-          var pair = shuffledPairs[pairIndex];
-
-          var sharedOrderData = {
-            experimental_block: blockIndex + 1,
-            block_pair_position: blockPairPosition,
-            randomized_pair_order: overallPairOrder
-          };
-
-          var primeTrial = Object.assign({}, pair, sharedOrderData, {
-            pair_role: "prime",
-            pair_trial_position: 1,
-            item_id: pair.prime_item_id,
-            stimulus: pair.prime,
-            lexicality: pair.prime_lexicality,
-            correct_response: pair.prime_correct_response,
-            paired_item_id: pair.target_item_id,
-            paired_stimulus: pair.target,
-            block_trial: blockTrialNumber,
-            randomized_trial_order: overallTrialOrder,
-            iti_duration_ms: chooseRandomValue(ITI_OPTIONS_MS)
+        randomizedUnits.forEach(function(unit, unitIndex) {
+          var orderedUnit = unit.slice().sort(function(first, second) {
+            return first.within_unit_position -
+              second.within_unit_position;
           });
 
-          blockTrialNumber++;
-          overallTrialOrder++;
+          orderedUnit.forEach(function(stimulusRow) {
+            var partner = orderedUnit.find(function(candidate) {
+              return candidate.stimulus_id !== stimulusRow.stimulus_id;
+            });
 
-          var targetTrial = Object.assign({}, pair, sharedOrderData, {
-            pair_role: "target",
-            pair_trial_position: 2,
-            item_id: pair.target_item_id,
-            stimulus: pair.target,
-            lexicality: pair.target_lexicality,
-            correct_response: pair.target_correct_response,
-            paired_item_id: pair.prime_item_id,
-            paired_stimulus: pair.prime,
-            block_trial: blockTrialNumber,
-            randomized_trial_order: overallTrialOrder,
-            iti_duration_ms: chooseRandomValue(ITI_OPTIONS_MS)
+            blocks[blockNumber - 1].push(
+              Object.assign({}, stimulusRow, {
+                paired_stimulus_id:
+                  partner ? partner.stimulus_id : "",
+                paired_stimulus:
+                  partner ? partner.stimulus : "",
+                block_unit_position: unitIndex + 1,
+                randomized_unit_order: overallUnitOrder,
+                block_trial: blockTrialNumber,
+                randomized_trial_order: overallTrialOrder,
+                iti_duration_ms: chooseRandomValue(ITI_OPTIONS_MS)
+              })
+            );
+
+            blockTrialNumber++;
+            overallTrialOrder++;
           });
 
-          blockTrialNumber++;
-          overallTrialOrder++;
-
-          blocks[blockIndex].push(primeTrial, targetTrial);
-
-          pairIndex++;
-          overallPairOrder++;
-        }
+          overallUnitOrder++;
+        });
       }
 
       return blocks;
@@ -672,16 +1110,16 @@
 
       stimulus: `
         <div class="text-screen">
-          <h1>Welcome to this experiment!</h1>
+          <h1>Bem-vindo(a) ao experimento!</h1>
 
           <p>
-            Please read the consent form below before deciding whether
-            you would like to participate.
+            Por favor, leia o termo de consentimento abaixo antes de decidir se
+            deseja participar.
           </p>
 
           <iframe
             src="${CONSENT_PDF_FILE}"
-            title="Research consent form"
+            title="Termo de consentimento para pesquisa"
             style="
               width:100%;
               height:65vh;
@@ -697,18 +1135,18 @@
               rel="noopener"
               style="color:white;text-decoration:underline;"
             >
-              Open the consent form in a new tab
+              Abrir o termo de consentimento em uma nova aba
             </a>
           </p>
 
           <p class="continue-prompt">
-            If you have read the consent form and agree to participate,
-            select <strong>I agree and wish to continue</strong>.
+            Se você leu o termo de consentimento e concorda em participar,
+            selecione <strong>Concordo e desejo continuar</strong>.
           </p>
 
           <p class="continue-prompt">
-            If you do not agree to participate, select
-            <strong>I do not agree</strong>.
+            Caso não concorde em participar, selecione
+            <strong>Não concordo</strong>.
           </p>
 
           <div style="
@@ -723,7 +1161,7 @@
               type="button"
               style="font-size:18px;padding:12px 18px;cursor:pointer;"
             >
-              I agree and wish to continue
+              Concordo e desejo continuar
             </button>
 
             <button
@@ -731,7 +1169,7 @@
               type="button"
               style="font-size:18px;padding:12px 18px;cursor:pointer;"
             >
-              I do not agree
+              Não concordo
             </button>
           </div>
         </div>
@@ -785,8 +1223,8 @@
 
         if (!data.consent_given) {
           jsPsych.abortExperiment(
-            "<p>Thank you for your interest! You chose not to participate. " +
-            "You may close this window.</p>"
+            "<p>Agradecemos seu interesse! Você optou por não participar. " +
+            "Você pode fechar esta janela agora.</p>"
           );
         }
       }
@@ -804,45 +1242,46 @@
 
       stimulus: `
         <div class="text-screen">
-          <h1>Instructions</h1>
+          <h1>Instruções</h1>
 
           <p>
-            In this experiment, letter strings will appear one after another.
-            You must make a lexical decision for <strong>every</strong> string.
-          </p>
-
-          <p>
-            Respond as quickly and accurately as possible:
+            Neste experimento, você será apresentado a várias palavras, uma
+            após a outra. Sua tarefa será decidir se cada uma delas é, ou poderia ser, 
+            uma palavra do português brasileiro.
           </p>
 
           <ul>
             <li>
-              Real Portuguese word: press <strong>J</strong> with your
-              <strong>right index finger</strong>.
+              Se a palavra que você ler for ou puder ser ser uma palavra do português,
+              pressione a tecla <strong>J</strong> com o
+              <strong>dedo indicador direito</strong>.
             </li>
 
             <li>
-              Not a real Portuguese word: press <strong>F</strong> with your
-              <strong>left index finger</strong>.
+              Se a palavra que você ler não for ou não puder ser uma palavra do português, 
+              pressione a tecla <strong>F</strong> com o
+              <strong>dedo indicador esquerdo</strong>.
             </li>
           </ul>
-
+          
           <p>
-            Each trial begins with a fixation cross. The letter string is
-            displayed briefly, and you may respond as soon as it appears.
+            Cada tentativa começa com uma cruz no meio da tela. Em seguida, 
+            aparecerá uma palavra, que ficará na tela até que eu você dê sua resposta. 
           </p>
-
+          
           <p>
-            Keep your index fingers on F and J throughout the task. The main
-            experiment is divided into four blocks, with three breaks.
-          </p>
-
-          <p>
-            After the task, you will complete a language-background survey.
+            No entanto, por favor responda <strong>da forma mais rápida e precisa possível</strong>! 
+            Para tanto, mantenha os dedos indicadores sobre as teclas F e J durante toda a tarefa. 
+          </p>  
+          
+          <p>  
+            O experimento principal está dividido em três blocos e você poderá fazer pausas entre eles.
+            Antes do experimento, você terá a oportunidade de treinar a tarefa. 
+            Após o experimento, pediremos que você responda a um questionário sobre seu histórico linguístico.
           </p>
 
           <p class="continue-prompt">
-            Press any key to continue to the practice.
+            Pressione qualquer tecla para continuar e começar a sessão de prática.
           </p>
         </div>
       `,
@@ -860,77 +1299,10 @@
     // ================================================================
 
     /*
-     * Practice is organized as three consecutive pairs, but every member of
-     * every pair receives its own F/J response.
+     * Practice stimuli are loaded from a separate eight-row CSV file.
      */
-    var practice_stimuli = [
-      {
-        pair_id: "practice_pair_01",
-        pair_role: "prime",
-        pair_trial_position: 1,
-        item_id: "practice_01",
-        stimulus: "CASA",
-        lexicality: "word",
-        correct_response: "j",
-        paired_item_id: "practice_02",
-        condition: "practice"
-      },
-      {
-        pair_id: "practice_pair_01",
-        pair_role: "target",
-        pair_trial_position: 2,
-        item_id: "practice_02",
-        stimulus: "LIVRO",
-        lexicality: "word",
-        correct_response: "j",
-        paired_item_id: "practice_01",
-        condition: "practice"
-      },
-      {
-        pair_id: "practice_pair_02",
-        pair_role: "prime",
-        pair_trial_position: 1,
-        item_id: "practice_03",
-        stimulus: "PUFRA",
-        lexicality: "nonword",
-        correct_response: "f",
-        paired_item_id: "practice_04",
-        condition: "practice"
-      },
-      {
-        pair_id: "practice_pair_02",
-        pair_role: "target",
-        pair_trial_position: 2,
-        item_id: "practice_04",
-        stimulus: "VERDE",
-        lexicality: "word",
-        correct_response: "j",
-        paired_item_id: "practice_03",
-        condition: "practice"
-      },
-      {
-        pair_id: "practice_pair_03",
-        pair_role: "prime",
-        pair_trial_position: 1,
-        item_id: "practice_05",
-        stimulus: "DALTE",
-        lexicality: "nonword",
-        correct_response: "f",
-        paired_item_id: "practice_06",
-        condition: "practice"
-      },
-      {
-        pair_id: "practice_pair_03",
-        pair_role: "target",
-        pair_trial_position: 2,
-        item_id: "practice_06",
-        stimulus: "NIMPO",
-        lexicality: "nonword",
-        correct_response: "f",
-        paired_item_id: "practice_05",
-        condition: "practice"
-      }
-    ];
+    var practice_stimuli =
+      await loadPracticeStimuli(PRACTICE_STIMULI_FILE);
 
 
     // ================================================================
@@ -942,24 +1314,26 @@
 
       stimulus: `
         <div class="text-screen">
-          <h1>Practice</h1>
-
+          <h1>Prática</h1>
           <p>
-            You will now complete six practice trials.
+            Lembre-se:
           </p>
 
-          <p>
-            Respond to every letter string. After each response, you will
-            receive feedback.
-          </p>
+          <ul>
+            <li>
+              Pressione <strong>J</strong> para uma palavra que exista ou cujo significado você entenderia
+              caso ela existisse no português.
+            </li>
 
+            <li>
+              Pressione <strong>F</strong> para uma palavra que não exista ou cujo significado você desconheceria caso ela
+              existisse no português.
+            </li>
+          </ul>
           <p>
-            Press <strong>J</strong> for a real word and <strong>F</strong>
-            for a nonword.
-          </p>
 
           <p class="continue-prompt">
-            Press any key to begin the practice.
+            Pressione qualquer tecla para iniciar a prática.
           </p>
         </div>
       `,
@@ -986,8 +1360,7 @@
           function() {
             return jsPsych.evaluateTimelineVariable("stimulus");
           },
-          STIMULUS_ONSET_MS,
-          STIMULUS_ONSET_MS + STIMULUS_DURATION_MS
+          STIMULUS_ONSET_MS
         )
       ],
 
@@ -995,7 +1368,7 @@
       choices: ["f", "j"],
       response_start_time: STIMULUS_ONSET_MS,
       response_ends_trial: true,
-      trial_duration: STIMULUS_ONSET_MS + RESPONSE_DEADLINE_MS,
+      trial_duration: null,
       post_trial_gap: function() {
         return chooseRandomValue(ITI_OPTIONS_MS);
       },
@@ -1004,30 +1377,29 @@
         task: "practice_lexical_decision",
         phase: "practice",
         paradigm: "continuous_lexical_decision",
-        pair_id: jsPsych.timelineVariable("pair_id"),
+        unit_id: jsPsych.timelineVariable("unit_id"),
+        unit_type: jsPsych.timelineVariable("unit_type"),
+        within_unit_position:
+          jsPsych.timelineVariable("within_unit_position"),
+        pair_cell: jsPsych.timelineVariable("pair_cell"),
         pair_role: jsPsych.timelineVariable("pair_role"),
-        pair_trial_position: jsPsych.timelineVariable("pair_trial_position"),
-        item_id: jsPsych.timelineVariable("item_id"),
+        stimulus_id: jsPsych.timelineVariable("stimulus_id"),
         stimulus_item: jsPsych.timelineVariable("stimulus"),
         lexicality: jsPsych.timelineVariable("lexicality"),
         correct_response: jsPsych.timelineVariable("correct_response"),
-        paired_item_id: jsPsych.timelineVariable("paired_item_id"),
         condition: jsPsych.timelineVariable("condition"),
+        feedback_text: jsPsych.timelineVariable("feedback"),
         fixation_duration_ms: FIXATION_DURATION_MS,
         pre_stimulus_blank_ms: PRE_STIMULUS_BLANK_MS,
-        stimulus_duration_ms: STIMULUS_DURATION_MS,
-        response_deadline_ms: RESPONSE_DEADLINE_MS,
         stimulus_onset_ms: STIMULUS_ONSET_MS
       },
 
       on_finish: function(data) {
         data.correct =
-          data.response !== null &&
           jsPsych.pluginAPI.compareKeys(
             data.response,
             data.correct_response
           );
-        data.missed_response = data.response === null;
       }
     };
 
@@ -1043,32 +1415,30 @@
             .values()[0];
 
         if (lastTarget.correct) {
-          return '<p class="feedback-correct">Correct!</p>';
-        }
-
-        if (lastTarget.missed_response) {
           return (
-            '<p class="feedback-incorrect">Too slow.</p>' +
-            '<p>The correct response was <strong>' +
-            lastTarget.correct_response.toUpperCase() +
-            '</strong>.</p>'
+            '<p class="feedback-correct">Correto!</p>' +
+            '<p>' + escapeHtml(lastTarget.feedback_text) + '</p>' +
+            '<p class="continue-prompt">' +
+            'Pressione qualquer tecla para continuar.</p>'
           );
         }
 
         return (
-          '<p class="feedback-incorrect">Incorrect.</p>' +
-          '<p>The correct response was <strong>' +
-          lastTarget.correct_response.toUpperCase() +
-          '</strong>.</p>'
+          '<p class="feedback-incorrect">Incorreto.</p>' +
+          '<p>' + escapeHtml(lastTarget.feedback_text) + '</p>' +
+          '<p class="continue-prompt">' +
+          'Pressione qualquer tecla para continuar.</p>'
         );
       },
 
-      choices: "NO_KEYS",
-      trial_duration: FEEDBACK_DURATION_MS,
+      choices: "ALL_KEYS",
 
       data: {
         task: "practice_feedback",
-        phase: "practice"
+        phase: "practice",
+        stimulus_id: jsPsych.timelineVariable("stimulus_id"),
+        stimulus_item: jsPsych.timelineVariable("stimulus"),
+        feedback_text: jsPsych.timelineVariable("feedback")
       }
     };
 
@@ -1098,15 +1468,15 @@
         if (accuracy > PRACTICE_PASS_THRESHOLD) {
           return `
             <div class="text-screen">
-              <h1>Practice complete</h1>
+              <h1>Prática concluída</h1>
 
               <p>
-                Your practice accuracy was
+                Seu percentual de acertos na prática foi de
                 <strong>${accuracyPercent}%</strong>.
               </p>
 
               <p class="continue-prompt">
-                Press any key to continue.
+                Pressione qualquer tecla para continuar.
               </p>
             </div>
           `;
@@ -1114,20 +1484,20 @@
 
         return `
           <div class="text-screen">
-            <h1>A little more practice is needed</h1>
+            <h1>É necessário praticar um pouco mais</h1>
 
             <p>
-              Your practice accuracy was
+              Seu percentual de acertos na prática foi de
               <strong>${accuracyPercent}%</strong>.
             </p>
 
             <p>
-              You need more than 80% accuracy to proceed, so the practice
-              trials will restart.
+              É necessário obter mais de 80% de acertos para prosseguir.
+              Por isso, as tentativas de prática serão reiniciadas.
             </p>
 
             <p class="continue-prompt">
-              Press any key to repeat the practice.
+              Pressione qualquer tecla para repetir a prática.
             </p>
           </div>
         `;
@@ -1179,24 +1549,25 @@
 
       stimulus: `
         <div class="text-screen">
-          <h1>You are now ready for the main experiment!</h1>
+          <h1>Você está pronto(a) para iniciar o experimento principal!</h1>
 
-          <p>Before beginning, please:</p>
+          <p>Antes de começar, pedimos por favor que você:</p>
 
           <ul>
-            <li>Maximize your browser window.</li>
-            <li>Turn off your phone, notifications, and music.</li>
-            <li>Avoid distractions and non-programmed breaks.</li>
+            <li>Maximize a janela do navegador.</li>
+            <li>Desative o celular, as notificações e a música.</li>
+            <li>Evite distrações e pausas não programadas.</li>
           </ul>
 
           <p>
-            The practice feedback will no longer appear. Continue responding
-            to every letter string: <strong>J</strong> for a real Portuguese
-            word and <strong>F</strong> for a nonword.
+            A partir de agora, você não receberá mais feedback. Continue respondendo
+            a todas as sequências de letras: use <strong>J</strong> para uma
+            palavra que exista ou que poderia existir, e <strong>F</strong> para uma que não exista ou que não
+            poderia existir.
           </p>
 
           <p class="continue-prompt">
-            Press the space bar to begin.
+            Pressione a barra de espaço para começar.
           </p>
         </div>
       `,
@@ -1216,21 +1587,22 @@
 
 
     // ================================================================
-    // 8. LOAD PRIME-TARGET PAIRS FROM CSV
+    // 8. LOAD THE SELECTED EXPERIMENTAL VERSION FROM CSV
     // ================================================================
 
     /*
-     * One CSV row represents one pair. The code preserves every spreadsheet
-     * column, shuffles complete pairs, and expands each pair into two adjacent
-     * lexical-decision trials: prime first, target second.
+     * One CSV contains all four counterbalanced versions. For the selected
+     * version, the code keeps the spreadsheet's three blocks and shuffles
+     * whole units within each block.
      */
-    var loadedMainPairs =
-      await loadMainPairs(MAIN_STIMULI_FILE);
+    var loadedExperimentInput =
+      await loadExperimentInput(
+        MAIN_STIMULI_FILE,
+        selectedVersion
+      );
 
-    var main_pairs = loadedMainPairs.pairs;
-    var main_pair_columns = loadedMainPairs.headers;
     var main_blocks =
-      dividePairsIntoFourBlocks(main_pairs);
+      buildRandomizedBlocks(loadedExperimentInput.rows);
 
 
     // ================================================================
@@ -1238,39 +1610,32 @@
     // ================================================================
 
     /*
-     * Preserve all original spreadsheet columns on both the prime row and the
-     * target row in the final data file.
+     * Preserve all original spreadsheet columns. The source column stimulus
+     * is saved as stimulus_item because the plugin uses stimulus internally.
      */
-    var mainPairDataFields = {};
-    main_pair_columns.forEach(function(columnName) {
-      mainPairDataFields[columnName] =
-        jsPsych.timelineVariable(columnName);
+    var mainTrialDataFields = {};
+    loadedExperimentInput.headers.forEach(function(columnName) {
+      if (columnName !== "stimulus") {
+        mainTrialDataFields[columnName] =
+          jsPsych.timelineVariable(columnName);
+      }
     });
 
     [
-      "pair_role",
-      "pair_trial_position",
-      "item_id",
-      "lexicality",
       "correct_response",
-      "paired_item_id",
+      "paired_stimulus_id",
       "paired_stimulus",
-      "experimental_block",
-      "block_pair_position",
-      "randomized_pair_order",
+      "block_unit_position",
+      "randomized_unit_order",
       "block_trial",
       "randomized_trial_order",
       "iti_duration_ms"
     ].forEach(function(columnName) {
-      mainPairDataFields[columnName] =
+      mainTrialDataFields[columnName] =
         jsPsych.timelineVariable(columnName);
     });
 
-    /*
-     * Use stimulus_item rather than stimulus in the saved data. The plugin
-     * itself uses a field named stimulus, which is removed before CSV export.
-     */
-    mainPairDataFields.stimulus_item =
+    mainTrialDataFields.stimulus_item =
       jsPsych.timelineVariable("stimulus");
 
     var main_continuous_trial = {
@@ -1288,8 +1653,7 @@
           function() {
             return jsPsych.evaluateTimelineVariable("stimulus");
           },
-          STIMULUS_ONSET_MS,
-          STIMULUS_ONSET_MS + STIMULUS_DURATION_MS
+          STIMULUS_ONSET_MS
         )
       ],
 
@@ -1297,14 +1661,14 @@
       choices: ["f", "j"],
       response_start_time: STIMULUS_ONSET_MS,
       response_ends_trial: true,
-      trial_duration: STIMULUS_ONSET_MS + RESPONSE_DEADLINE_MS,
+      trial_duration: null,
       post_trial_gap: function() {
         return jsPsych.evaluateTimelineVariable("iti_duration_ms");
       },
 
       data: Object.assign(
         {},
-        mainPairDataFields,
+        mainTrialDataFields,
         {
           task: "main_lexical_decision",
           phase: "main",
@@ -1312,21 +1676,16 @@
           timing_method: "psychophysics_requestAnimationFrame",
           fixation_duration_ms: FIXATION_DURATION_MS,
           pre_stimulus_blank_ms: PRE_STIMULUS_BLANK_MS,
-          stimulus_duration_ms: STIMULUS_DURATION_MS,
-          response_deadline_ms: RESPONSE_DEADLINE_MS,
-          stimulus_onset_ms: STIMULUS_ONSET_MS,
-          prime_target_lag_trials: 1
+          stimulus_onset_ms: STIMULUS_ONSET_MS
         }
       ),
 
       on_finish: function(data) {
         data.correct =
-          data.response !== null &&
           jsPsych.pluginAPI.compareKeys(
             data.response,
             data.correct_response
           );
-        data.missed_response = data.response === null;
 
         if (data.pair_role === "target") {
           var precedingPrime =
@@ -1334,22 +1693,28 @@
               .get()
               .filter({
                 task: "main_lexical_decision",
-                pair_id: data.pair_id,
+                unit_id: data.unit_id,
                 pair_role: "prime"
               })
               .last(1)
               .values()[0];
 
           if (precedingPrime) {
-            data.preceding_prime_item_id = precedingPrime.item_id;
+            data.preceding_prime_stimulus_id =
+              precedingPrime.stimulus_id;
             data.preceding_prime_stimulus = precedingPrime.stimulus_item;
             data.preceding_prime_response = precedingPrime.response;
             data.preceding_prime_correct = precedingPrime.correct;
             data.preceding_prime_rt = precedingPrime.rt;
             data.prime_target_pair_verified =
-              precedingPrime.pair_id === data.pair_id;
+              precedingPrime.unit_id === data.unit_id &&
+              precedingPrime.stimulus_id === data.paired_stimulus_id &&
+              precedingPrime.block === data.block &&
+              precedingPrime.block_trial + 1 === data.block_trial &&
+              precedingPrime.randomized_trial_order + 1 ===
+                data.randomized_trial_order;
           } else {
-            data.preceding_prime_item_id = "";
+            data.preceding_prime_stimulus_id = "";
             data.preceding_prime_stimulus = "";
             data.preceding_prime_response = "";
             data.preceding_prime_correct = "";
@@ -1357,7 +1722,7 @@
             data.prime_target_pair_verified = false;
           }
         } else {
-          data.preceding_prime_item_id = "";
+          data.preceding_prime_stimulus_id = "";
           data.preceding_prime_stimulus = "";
           data.preceding_prime_response = "";
           data.preceding_prime_correct = "";
@@ -1373,18 +1738,18 @@
 
         stimulus: `
           <div class="text-screen">
-            <h1>Pause</h1>
+            <h1>Pausa</h1>
 
             <p>
-              You have completed block ${completedBlock} of 4.
+              Você concluiu o bloco ${completedBlock} de 3.
             </p>
 
             <p>
-              You may take a short break.
+              Você pode fazer uma breve pausa.
             </p>
 
             <p class="continue-prompt">
-              Press any key when you are ready to continue.
+              Pressione qualquer tecla quando estiver pronto(a) para continuar.
             </p>
           </div>
         `,
@@ -1395,12 +1760,12 @@
         },
 
         on_load: function() {
-          jsPsych.progressBar.progress = completedBlock / 4;
+          jsPsych.progressBar.progress = completedBlock / 3;
         }
       };
     }
 
-    for (var blockNumber = 1; blockNumber <= 4; blockNumber++) {
+    for (var blockNumber = 1; blockNumber <= 3; blockNumber++) {
       var trialsForThisBlock = main_blocks[blockNumber - 1];
 
       var experimentalBlock = {
@@ -1408,15 +1773,15 @@
         timeline_variables: trialsForThisBlock,
 
         /*
-         * The pairs have already been shuffled. Do not randomize here, because
-         * that would separate each target from its immediately preceding prime.
+         * Whole units have already been shuffled. Do not randomize here,
+         * because that would separate a target from its preceding prime.
          */
         randomize_order: false
       };
 
       timeline.push(experimentalBlock);
 
-      if (blockNumber < 4) {
+      if (blockNumber < 3) {
         timeline.push(makePauseScreen(blockNumber));
       }
     }
@@ -1435,43 +1800,34 @@
             .get()
             .filter({ task: "main_lexical_decision" });
 
-        var targetTrials = allTrials.filter({ pair_role: "target" });
-        var correctTargetTrials = targetTrials.filter({ correct: true });
+        var correctTrials = allTrials.filter({ correct: true });
 
         var overallAccuracy = calculateAccuracy(allTrials);
-        var targetAccuracy = calculateAccuracy(targetTrials);
 
         var overallAccuracyPercent =
           Math.round(overallAccuracy * 100);
-        var targetAccuracyPercent =
-          Math.round(targetAccuracy * 100);
 
-        var meanTargetRt =
-          correctTargetTrials.count() > 0
-            ? Math.round(correctTargetTrials.select("rt").mean())
-            : "N/A";
+        var meanCorrectRt =
+          correctTrials.count() > 0
+            ? Math.round(correctTrials.select("rt").mean())
+            : "N/D";
 
         return `
           <div class="text-screen">
-            <h1>The main task is complete!</h1>
+            <h1>A tarefa principal foi concluída!</h1>
 
             <p>
-              Your overall accuracy was
+              Seu percentual geral de acertos foi de
               <strong>${overallAccuracyPercent}%</strong>.
             </p>
 
             <p>
-              Your accuracy on target trials was
-              <strong>${targetAccuracyPercent}%</strong>.
-            </p>
-
-            <p>
-              Your average response time on correct target trials was
-              <strong>${meanTargetRt} ms</strong>.
+              Seu tempo médio de resposta nas tentativas corretas foi de
+              <strong>${meanCorrectRt} ms</strong>.
             </p>
 
             <p class="continue-prompt">
-              Press any key to continue to the final questionnaire.
+              Pressione qualquer tecla para continuar para o questionário final.
             </p>
           </div>
         `;
@@ -1489,47 +1845,47 @@
     timeline.push(final_screen);
 
     // ================================================================
-    // LANGUAGE-BACKGROUND AND DOMINANCE QUESTIONNAIRE
+    // 11. LANGUAGE-BACKGROUND AND DOMINANCE QUESTIONNAIRE
     // ================================================================
 
     function languageBackgroundSurveyHtml() {
       return `
         <form id="language-background-form" class="language-survey">
-          <h1>Language background questionnaire</h1>
+          <h1>Questionário sobre histórico linguístico</h1>
 
           <p class="language-survey-intro">
-            The following questions ask about your Brazilian Portuguese
-            language background, exposure to other languages, current
-            language use, and places where you have lived.
+            As perguntas a seguir tratam do seu histórico com o português
+            brasileiro, da exposição a outras línguas, do uso atual de
+            línguas e dos lugares onde você viveu.
           </p>
 
           <p class="survey-required-note">
-            Fields marked with an asterisk (*) are required.
+            Os campos marcados com asterisco (*) são obrigatórios.
           </p>
 
           <div class="survey-question">
             <fieldset>
-              <legend>Gender: *</legend>
+              <legend>Gênero: *</legend>
 
               <div class="survey-options">
                 <label class="survey-option">
                   <input type="radio" name="gender" value="Male" required>
-                  <span>Male</span>
+                  <span>Masculino</span>
                 </label>
 
                 <label class="survey-option">
                   <input type="radio" name="gender" value="Female">
-                  <span>Female</span>
+                  <span>Feminino</span>
                 </label>
 
                 <label class="survey-option">
                   <input type="radio" name="gender" value="Nonbinary">
-                  <span>Nonbinary</span>
+                  <span>Não binário</span>
                 </label>
 
                 <label class="survey-option">
                   <input type="radio" name="gender" value="Other">
-                  <span>Other</span>
+                  <span>Outro</span>
                 </label>
 
                 <label class="survey-option">
@@ -1538,7 +1894,7 @@
                     name="gender"
                     value="I don't want to specify"
                   >
-                  <span>I don’t want to specify</span>
+                  <span>Prefiro não informar</span>
                 </label>
               </div>
 
@@ -1547,7 +1903,7 @@
                 class="conditional-survey"
               >
                 <label for="gender_other">
-                  Please specify:
+                  Especifique:
                 </label>
 
                 <input
@@ -1563,7 +1919,7 @@
 
           <div class="survey-inline-grid">
             <div class="survey-question">
-              <label for="age">Age: *</label>
+              <label for="age">Idade: *</label>
 
               <input
                 id="age"
@@ -1578,34 +1934,34 @@
 
             <div class="survey-question">
               <label for="education">
-                Highest level of education: *
+                Maior nível de escolaridade: *
               </label>
 
               <select id="education" name="education" required>
-                <option value="">Select one</option>
+                <option value="">Selecione uma opção</option>
                 <option value="incomplete high school">
-                  Incomplete high school
+                  Ensino médio incompleto
                 </option>
                 <option value="complete high school">
-                  Complete high school
+                  Ensino médio completo
                 </option>
                 <option value="incomplete technical education">
-                  Incomplete technical education
+                  Ensino técnico incompleto
                 </option>
                 <option value="complete technical education">
-                  Complete technical education
+                  Ensino técnico completo
                 </option>
                 <option value="incomplete undergraduate education">
-                  Incomplete undergraduate education
+                  Ensino superior incompleto
                 </option>
                 <option value="complete undergraduate education">
-                  Complete undergraduate education
+                  Ensino superior completo
                 </option>
                 <option value="incomplete graduate education">
-                  Incomplete graduate education
+                  Pós-graduação incompleta
                 </option>
                 <option value="complete graduate education">
-                  Complete graduate education
+                  Pós-graduação completa
                 </option>
               </select>
             </div>
@@ -1613,7 +1969,7 @@
 
           <div class="survey-question">
             <label for="daily_languages">
-              Which language(s) do you predominantly use in daily life? *
+              Qual(is) língua(s) você usa predominantemente no dia a dia? *
             </label>
 
             <input
@@ -1627,8 +1983,8 @@
           <div class="survey-question">
             <fieldset>
               <legend>
-                Were you exposed to any other languages besides
-                Brazilian Portuguese at home when growing up? *
+                Durante seu crescimento, você teve contato em casa com
+                alguma língua além do português brasileiro? *
               </legend>
 
               <div class="survey-options">
@@ -1639,7 +1995,7 @@
                     value="yes"
                     required
                   >
-                  <span>Yes</span>
+                  <span>Sim</span>
                 </label>
 
                 <label class="survey-option">
@@ -1648,7 +2004,7 @@
                     name="home_other_language"
                     value="no"
                   >
-                  <span>No</span>
+                  <span>Não</span>
                 </label>
               </div>
 
@@ -1657,12 +2013,12 @@
                 class="conditional-survey"
               >
                 <div class="survey-question-title">
-                  Please answer the following about the other
-                  language(s):
+                  Responda às perguntas abaixo sobre a(s) outra(s)
+                  língua(s):
                 </div>
 
                 <label for="home_languages">
-                  Which language(s)?
+                  Qual(is) língua(s)?
                 </label>
 
                 <input
@@ -1677,8 +2033,8 @@
                   for="home_exposure_years"
                   style="margin-top:16px;"
                 >
-                  For approximately how many years were you exposed
-                  to this language?
+                  Por aproximadamente quantos anos você teve contato
+                  com essa língua?
                 </label>
 
                 <input
@@ -1696,9 +2052,9 @@
                   for="home_relative_use"
                   style="margin-top:16px;"
                 >
-                  Would you say you spoke this language more than,
-                  less than, or about the same amount as Brazilian
-                  Portuguese at home?
+                  Você diria que falava essa língua em casa mais, menos
+                  ou aproximadamente na mesma proporção que o português
+                  brasileiro?
                 </label>
 
                 <select
@@ -1707,15 +2063,15 @@
                   data-required-when-visible="true"
                   disabled
                 >
-                  <option value="">Select one</option>
+                  <option value="">Selecione uma opção</option>
                   <option value="more than Brazilian Portuguese">
-                    More than Brazilian Portuguese
+                    Mais do que o português brasileiro
                   </option>
                   <option value="less than Brazilian Portuguese">
-                    Less than Brazilian Portuguese
+                    Menos do que o português brasileiro
                   </option>
                   <option value="about the same as Brazilian Portuguese">
-                    About the same as Brazilian Portuguese
+                    Aproximadamente o mesmo que o português brasileiro
                   </option>
                 </select>
               </div>
@@ -1725,9 +2081,8 @@
           <div class="survey-question">
             <fieldset>
               <legend>
-                Were you exposed to any other languages besides
-                Brazilian Portuguese in a school or work
-                environment? *
+                Você teve contato com alguma língua além do português
+                brasileiro na escola ou no trabalho? *
               </legend>
 
               <div class="survey-options">
@@ -1738,7 +2093,7 @@
                     value="yes"
                     required
                   >
-                  <span>Yes</span>
+                  <span>Sim</span>
                 </label>
 
                 <label class="survey-option">
@@ -1747,7 +2102,7 @@
                     name="school_work_other_language"
                     value="no"
                   >
-                  <span>No</span>
+                  <span>Não</span>
                 </label>
               </div>
 
@@ -1756,12 +2111,12 @@
                 class="conditional-survey"
               >
                 <div class="survey-question-title">
-                  Please answer the following about the other
-                  language(s):
+                  Responda às perguntas abaixo sobre a(s) outra(s)
+                  língua(s):
                 </div>
 
                 <label for="school_work_languages">
-                  Which language(s)?
+                  Qual(is) língua(s)?
                 </label>
 
                 <input
@@ -1776,8 +2131,8 @@
                   for="school_work_exposure_years"
                   style="margin-top:16px;"
                 >
-                  For approximately how many years were you exposed
-                  to this language?
+                  Por aproximadamente quantos anos você teve contato
+                  com essa língua?
                 </label>
 
                 <input
@@ -1795,9 +2150,9 @@
                   for="school_work_relative_use"
                   style="margin-top:16px;"
                 >
-                  Would you say you spoke this language more than,
-                  less than, or about the same amount as Brazilian
-                  Portuguese in school or at work?
+                  Você diria que usava essa língua na escola ou no trabalho
+                  mais, menos ou aproximadamente na mesma proporção que o
+                  português brasileiro?
                 </label>
 
                 <select
@@ -1806,15 +2161,15 @@
                   data-required-when-visible="true"
                   disabled
                 >
-                  <option value="">Select one</option>
+                  <option value="">Selecione uma opção</option>
                   <option value="more than Brazilian Portuguese">
-                    More than Brazilian Portuguese
+                    Mais do que o português brasileiro
                   </option>
                   <option value="less than Brazilian Portuguese">
-                    Less than Brazilian Portuguese
+                    Menos do que o português brasileiro
                   </option>
                   <option value="about the same as Brazilian Portuguese">
-                    About the same as Brazilian Portuguese
+                    Aproximadamente o mesmo que o português brasileiro
                   </option>
                 </select>
               </div>
@@ -1824,8 +2179,8 @@
           <div class="survey-inline-grid">
             <div class="survey-question">
               <label for="brazil_growing_up_years">
-                For how many years did you live in Brazil when
-                growing up? *
+                Por quantos anos você viveu no Brasil durante seu
+                crescimento? *
               </label>
 
               <input
@@ -1841,7 +2196,7 @@
 
             <div class="survey-question">
               <label for="current_country">
-                Which country do you currently live in? *
+                Em que país você vive atualmente? *
               </label>
 
               <input
@@ -1855,7 +2210,7 @@
                 for="current_country_years"
                 style="margin-top:16px;"
               >
-                For how many years have you lived in this country? *
+                Há quantos anos você vive nesse país? *
               </label>
 
               <input
@@ -1873,8 +2228,8 @@
           <div class="survey-question">
             <fieldset>
               <legend>
-                Have you lived in places where any other languages
-                are spoken? *
+                Você já viveu em lugares onde se fala alguma outra
+                língua? *
               </legend>
 
               <div class="survey-options">
@@ -1885,7 +2240,7 @@
                     value="yes"
                     required
                   >
-                  <span>Yes</span>
+                  <span>Sim</span>
                 </label>
 
                 <label class="survey-option">
@@ -1894,7 +2249,7 @@
                     name="lived_other_language_places"
                     value="no"
                   >
-                  <span>No</span>
+                  <span>Não</span>
                 </label>
               </div>
 
@@ -1903,7 +2258,7 @@
                 class="conditional-survey"
               >
                 <label for="other_language_places">
-                  Please describe the place(s) and language(s):
+                  Descreva o(s) lugar(es) e a(s) língua(s):
                 </label>
 
                 <textarea
@@ -1918,7 +2273,7 @@
 
           <div class="survey-question">
             <label for="language_background_comments">
-              Do you have any other comments?
+              Deseja acrescentar algum outro comentário?
             </label>
 
             <textarea
@@ -1933,7 +2288,7 @@
               type="button"
               class="survey-submit-button"
             >
-              Submit questionnaire and save data
+              Enviar questionário e salvar dados
             </button>
           </div>
         </form>
@@ -2087,7 +2442,7 @@
           */
           submitButton.disabled = true;
           submitButton.textContent =
-            "Submitting questionnaire...";
+            "Enviando questionário...";
 
           var formData =
             new FormData(form);
@@ -2180,7 +2535,7 @@
 
         stimulus:
           '<p style="font-size: 24px;">' +
-          'Saving your data locally...' +
+          'Salvando seus dados localmente...' +
           '</p>',
 
         choices: "NO_KEYS",
@@ -2200,12 +2555,12 @@
 
               displayElement.innerHTML =
                 '<p style="font-size: 24px;">' +
-                'Data saved successfully in the local data folder.' +
+                'Dados salvos com sucesso na pasta local de dados.' +
                 '</p>' +
-                '<p>You can close this window.</p>';
+                '<p>Você pode fechar esta janela.</p>';
             })
             .catch(function(error) {
-              console.error("Local data-saving error:", error);
+              console.error("Erro ao salvar os dados localmente:", error);
 
               var displayElement =
                 document.querySelector("#jspsych-content") ||
@@ -2213,7 +2568,7 @@
 
               displayElement.innerHTML =
                 '<p style="font-size: 24px;">' +
-                'The local data could not be saved.' +
+                'Não foi possível salvar os dados localmente.' +
                 '</p>' +
                 '<p>' + error.message + '</p>';
             });
@@ -2249,9 +2604,9 @@
         type: jsPsychHtmlKeyboardResponse,
         stimulus:
           '<p style="font-size: 24px;">' +
-          'Data saved successfully.' +
+          'Dados salvos com sucesso.' +
           '</p>' +
-          '<p>You can close this window.</p>',
+          '<p>Clique neste link para ser redirecionado de volta ao Prolific: https://app.prolific.com/submissions/complete?cc=C1EU7F4Z. Em seguida, você pode fechar essa janela.</p>',
         choices: "NO_KEYS",
         data: {
           task: "online_save_confirmation"
@@ -2270,7 +2625,7 @@
     }
 
     startExperiment().catch(function(error) {
-      console.error("Experiment startup error:", error);
+      console.error("Erro ao iniciar o experimento:", error);
 
       document.body.innerHTML = `
         <main style="
@@ -2281,9 +2636,12 @@
           font-family: Arial, sans-serif;
           line-height: 1.5;
         ">
-          <h1>Experiment could not start</h1>
+          <h1>Não foi possível iniciar o experimento</h1>
           <p>${error.message}</p>
-          <p>Open the browser developer console for additional details.</p>
+          <p>
+            Abra o console de desenvolvedor do navegador para obter
+            mais detalhes.
+          </p>
         </main>
       `;
     });
